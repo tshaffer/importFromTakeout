@@ -1,0 +1,24 @@
+{
+  "name": "import-from-takeout",
+  "version": "0.0.1",
+  "description": "Imports photos that were exported from google takeout into a mongo db",
+  "main": "dist/app.js",
+  "scripts": {
+    "build-ts": "tsc",
+    "start": "npm run app",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "author": "Ted",
+  "license": "ISC",
+  "dependencies": {
+    "lodash": "^4.17.20",
+    "mongoose": "^5.10.19"
+  },
+  "devDependencies": {
+    "@types/lodash": "^4.14.165",
+    "@types/mongoose": "^5.10.1",
+    "@types/node-schedule": "^1.3.1",
+    "tslint": "^6.1.3",
+    "typescript": "^4.0.5"
+  }
+}
