@@ -52,8 +52,7 @@ const importImageFiles = async () => {
         fileName: imageFile,
       };
       const retVal: any = await addMediaItemToDb(dbMediaItem);
-      console.log(retVal);
-      // retVal._id.toString()
+      const dbRecordId: string= retVal.insertedId._id.toString();
 
     }
   } catch (error) {
