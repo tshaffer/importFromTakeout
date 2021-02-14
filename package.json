@@ -16,7 +16,8 @@
     "fs-extra": "^9.0.1",
     "lodash": "^4.17.20",
     "mongoose": "^5.10.19",
-    "node-dir": "^0.1.17"
+    "node-dir": "^0.1.17",
+    "ts-exif-parser": "^0.2.1"
   },
   "devDependencies": {
     "@types/exif": "^0.6.1",
