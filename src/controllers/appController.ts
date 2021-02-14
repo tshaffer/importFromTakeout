@@ -1,7 +1,13 @@
-import { getImageFiles } from './fileUtilities';
-const util = require('util');
+import { getImageFiles } from './fsUtils';
+import { getExifData } from './exifUtils';
 
-var ExifImage = require('exif').ExifImage;
+import {
+  DbMediaItem
+} from '../types';
+
+import {
+  addMediaItemToDb
+} from '../controllers';
 
 import { mediaItemsDir } from '../app';
 
@@ -42,6 +48,12 @@ const importImageFiles = async () => {
       // copy file to destination path
       
       // add record to db
+      const dbMediaItem: DbMediaItem = {
+        fileName: imageFile,
+      };
+      const retVal: any = await addMediaItemToDb(dbMediaItem);
+      console.log(retVal);
+      // retVal._id.toString()
 
     }
   } catch (error) {
@@ -62,19 +74,3 @@ const importImageFiles = async () => {
   //   console.log('Error: ' + error.message);
   // }
 
-const getExifData = async (imageFile: string) => {
-  return new Promise((resolve, reject) => {
-    try {
-      new ExifImage({ image: imageFile }, function (error: any, exifData: any) {
-        if (error) {
-          return reject(error);
-        }
-        else {
-          return resolve(exifData);
-        }
-      });
-    } catch (error) {
-      return reject(error);
-    }
-  })
-}

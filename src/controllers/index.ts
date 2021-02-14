@@ -1,2 +1,4 @@
 export * from './appController';
-export * from './fileUtilities';
+export * from './dbInterface';
+export * from './exifUtils';
+export * from './fsUtils';
