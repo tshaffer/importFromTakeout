@@ -1,5 +1,5 @@
 import { getImageFiles } from './fsUtils';
-import { getExifData } from './exifUtils';
+import { exifToDbItem, getExifData } from './exifUtils';
 
 import {
   DbMediaItem
@@ -10,6 +10,7 @@ import {
 } from '../controllers';
 
 import { mediaItemsDir } from '../app';
+import { ExifData } from 'exif';
 
 
 export const runApp = () => {
@@ -33,33 +34,41 @@ const importImageFiles = async () => {
   const imageFiles = getImageFiles(mediaItemsDir);
   console.log(imageFiles);
 
+  let imageCount = 0;
+
   try {
     // for each image file path
     for (const imageFile of imageFiles) {
-      
+
+      const imageFilePath = imageFile;
+      // const imageFilePath = '/Volumes/SHAFFEROTO/takeout/unzipped/Takeout 15/Google Photos/Photos from 2020/IMG_4464.JPG';
+      // const imageFilePath = '/Volumes/SHAFFEROTO/takeout/unzipped/Takeout 1/Google Photos/Summer 2018/IMG_3146.JPG';
+
       // get exif data
-      const exifData = await getExifData(imageFile);
-      console.log(exifData);
+      const exifData = await getExifData(imageFilePath);
+      const dbMediaItem: DbMediaItem = exifToDbItem(imageFilePath, exifData);
 
       // get sha1
-      
-      // get destination file path from root directory, sha1
-      
-      // copy file to destination path
-      
-      // add record to db
-      const dbMediaItem: DbMediaItem = {
-        fileName: imageFile,
-      };
-      const retVal: any = await addMediaItemToDb(dbMediaItem);
-      const dbRecordId: string= retVal.insertedId._id.toString();
 
+      // get destination file path from root directory, sha1
+
+      // copy file to destination path
+
+      // add record to db
+      const retVal: any = await addMediaItemToDb(dbMediaItem);
+      // const dbRecordId: string = retVal.insertedId._id.toString();
+
+      imageCount++;
+      if (imageCount > 10) {
+        debugger;
+      }
     }
   } catch (error) {
     console.log('Error: ', error);
     debugger;
   }
 }
+
   // const filePath = '/Volumes/SHAFFEROTO/takeout/unzipped/Takeout 15/Google Photos/Photos from 2020/IMG_4464.JPG';
 
   // try {

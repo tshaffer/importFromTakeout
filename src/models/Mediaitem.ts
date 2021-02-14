@@ -4,8 +4,18 @@ const Schema = mongoose.Schema;
 
 const MediaitemSchema = new Schema(
   {
-      id: {type: String, unique: true},
-      fileName: {type: String, required: true},
+    fileName: { type: String, required: true },
+    filePath: { type: String, default: '' },
+    title: { type: String },
+    description: { type: String },
+    mimeType: { type: String },
+    width: { type: Number },
+    height: { type: Number },
+    creationDate: { type: Date },
+    dateTimeOriginal: { type: Date },
+    modifyDate: { type: Date },
+    gpsLatitude: { type: Number },
+    gpsLongitude: { type: Number },
   }
 );
 
