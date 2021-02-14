@@ -7,7 +7,7 @@ const getFilesInDirectory = (rootDirPath: string) => {
   return nodeDir.files(rootDirPath, {sync:true});
 }
 
-export const getImageFilesInDirectory = (rootPath: string) => {
+export const getImageFiles = (rootPath: string) => {
   const imageFiles: string[] = [];
   const files = getFilesInDirectory(rootPath);
   // TEDTODO - use regex?
