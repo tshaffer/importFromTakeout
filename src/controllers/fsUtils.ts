@@ -58,3 +58,26 @@ export const getFilePath = (rootDirPath: string, uniqueId: string): string => {
   const dirPath = getShardedDirectory(uniqueId, rootDirPath);
   return path.join(dirPath, uniqueId);
 }
+
+export const getFileBuffer = (filePath: string): Promise<Buffer> => {
+
+  const buffer: Buffer = Buffer.alloc(65635);
+
+  const fd: any = fs.openSync(filePath, 'r');
+  return new Promise((resolve, reject) => {
+    fs.read(fd, buffer, 0, buffer.length, 0, (err, bytes) => {
+      if (err) {
+        console.log(err);
+        return reject(err);
+      } else {
+        fs.close(fd, function (err) {
+          if (err) {
+            console.log(err);
+            return reject(err);
+          }
+        });
+        return resolve(buffer);
+      }
+    })
+  });
+}

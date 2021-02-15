@@ -1,5 +1,14 @@
 import { getFilePath, getImageFiles } from './fsUtils';
-import { exifToDbItem, getExifData, trackExifPropertyCounts } from './exifUtils';
+import { 
+  // exifToDbItem, 
+  getExifData, 
+  trackExifPropertyCounts
+ } from './exifUtils';
+
+ import { 
+  ExifData,
+  ExifParserFactory,
+ } from "ts-exif-parser";
 
 import {
   DbMediaItem
@@ -13,7 +22,7 @@ import {
   getStringSha1
 } from './/fsUtils';
 
-import { ExifData } from 'exif';
+// import { ExifData } from 'exif';
 
 import { mediaItemsDir } from '../app';
 import { exifPropertyCount } from './exifUtils';
@@ -39,7 +48,7 @@ const importImageFiles = async () => {
   const imageFiles = getImageFiles(mediaItemsDir);
   console.log(imageFiles);
 
-  // let imageCount = 0;
+  let imageCount = 0;
 
   try {
     // for each image file path
@@ -53,6 +62,7 @@ const importImageFiles = async () => {
 
       try {
         const exifData: ExifData = await getExifData(imageFilePath);
+        console.log(exifData);
         trackExifPropertyCounts(exifData);
       } catch (error) {
         console.log('getExifData Error: ', error);
@@ -74,12 +84,12 @@ const importImageFiles = async () => {
       // update db record with filePath
       // await setMediaItemFilePathInDb(dbRecordId, targetFilePath);
 
-      // imageCount++;
-      // if (imageCount > 10) {
-      //   console.log('exifPropertyCount');
-      //   console.log(exifPropertyCount);
-      //   debugger;
-      // }
+      imageCount++;
+      if (imageCount > 100) {
+        console.log('exifPropertyCount');
+        console.log(exifPropertyCount);
+        debugger;
+      }
     }
     console.log('exifPropertyCount');
     console.log(exifPropertyCount);

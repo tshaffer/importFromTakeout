@@ -10,26 +10,24 @@ import {
 
 import {
   ExifData,
-  ExifImage,
-} from 'exif';
-import { DbMediaItem } from '../types';
+  ExifParserFactory,
+  ExifTags,
+} from "ts-exif-parser";
 
-export const getExifData = async (imageFile: string): Promise<ExifData> => {
-  return new Promise((resolve, reject) => {
-    try {
-      new ExifImage({ image: imageFile }, function (error: any, exifData: any) {
-        if (error) {
-          return reject(error);
-        }
-        else {
-          return resolve(exifData);
-        }
-      });
-    } catch (error) {
-      return reject(error);
-    }
-  })
-};
+import { DbMediaItem } from '../types';
+import { getFileBuffer } from './fsUtils';
+
+export const getExifData = async (filePath: string): Promise<ExifData> => {
+  try {
+    const data: Buffer = await getFileBuffer(filePath);
+    const exifData: ExifData = ExifParserFactory.create(data).parse();
+    console.log(exifData);
+    return exifData;
+  } catch (error) {
+    console.log('getExifData error: ', error);
+    debugger;
+  }
+}
 
 export const exifToDbItem = (imageFilePath: string, exifData: ExifData): DbMediaItem => {
 
@@ -43,34 +41,37 @@ export const exifToDbItem = (imageFilePath: string, exifData: ExifData): DbMedia
     fileName: path.basename(imageFilePath),
   }
 
-  if (isNumber(exifData.exif.ExifImageWidth)) {
-    dbMediaItem.width = exifData.exif.ExifImageWidth;
+  if (isObject(exifData.imageSize) && isNumber(exifData.imageSize.width)) {
+    dbMediaItem.width = exifData.imageSize.width;
   }
 
-  if (isNumber(exifData.exif.ExifImageHeight)) {
-    dbMediaItem.height = exifData.exif.ExifImageHeight;
+  if (isObject(exifData.imageSize) && isNumber(exifData.imageSize.height)) {
+    dbMediaItem.height = exifData.imageSize.height;
   }
 
-  if (isDate(exifData.exif.CreateDate)) {
-    dbMediaItem.creationDate = exifData.exif.CreateDate;
-  }
-  
-  if (isDate(exifData.exif.DateTimeOriginal)) {
-    dbMediaItem.dateTimeOriginal = exifData.exif.DateTimeOriginal;
-  }
-  
-  if (isString(exifData.image.ModifyDate)) {
-    dbMediaItem.modifyDate = exifData.image.ModifyDate;
-  }
-  
-  if (isNumber(exifData.gps.GPSLatitude)) {
-    dbMediaItem.gpsLatitude = exifData.gps.GPSLatitude;
+  if (isObject(exifData.tags)) {
+    const tags: ExifTags = exifData.tags;
+    if (isDate(tags.CreateDate)) {
+      dbMediaItem.creationDate = tags.CreateDate;
+    }
+
+    if (isDate(tags.DateTimeOriginal)) {
+      dbMediaItem.dateTimeOriginal = tags.DateTimeOriginal;
+    }
+
+    if (isString(tags.ModifyDate)) {
+      dbMediaItem.modifyDate = tags.ModifyDate;
+    }
+
+    if (isNumber(tags.GPSLatitude)) {
+      dbMediaItem.gpsLatitude = tags.GPSLatitude;
+    }
+
+    if (isNumber(tags.GPSLongitude)) {
+      dbMediaItem.gpsLongitude = tags.GPSLongitude;
+    }
   }
 
-  if (isNumber(exifData.gps.GPSLongitude)) {
-    dbMediaItem.gpsLongitude = exifData.gps.GPSLongitude;
-  }
-  
   return dbMediaItem;
 }
 
@@ -87,8 +88,8 @@ const exifGpsPropertyCounts = exifPropertyCount['gps'];
 
 export const trackExifPropertyCounts = (exifData: ExifData): void => {
   if (!isNil(exifData)) {
-    if (isObject(exifData.image)) {
-      const imageKeys: string[] = Object.keys(exifData.image);
+    if (isObject(exifData.imageSize)) {
+      const imageKeys: string[] = Object.keys(exifData.imageSize);
       for (const imageKey of imageKeys) {
         if (isNil(exifImagePropertyCounts[imageKey])) {
           exifImagePropertyCounts[imageKey] = 1;
@@ -97,23 +98,13 @@ export const trackExifPropertyCounts = (exifData: ExifData): void => {
         }
       }
     }
-    if (isObject(exifData.exif)) {
-      const exifKeys: string[] = Object.keys(exifData.exif);
+    if (isObject(exifData.tags)) {
+      const exifKeys: string[] = Object.keys(exifData.tags);
       for (const exifKey of exifKeys) {
         if (isNil(exifExifPropertyCounts[exifKey])) {
           exifExifPropertyCounts[exifKey] = 1;
         } else {
           exifExifPropertyCounts[exifKey] = exifExifPropertyCounts[exifKey] + 1;
-        }
-      }
-    }
-    if (isObject(exifData.gps)) {
-      const gpsKeys: string[] = Object.keys(exifData.gps);
-      for (const gpsKey of gpsKeys) {
-        if (isNil(exifGpsPropertyCounts[gpsKey])) {
-          exifGpsPropertyCounts[gpsKey] = 1;
-        } else {
-          exifGpsPropertyCounts[gpsKey] = exifGpsPropertyCounts[gpsKey] + 1;
         }
       }
     }
