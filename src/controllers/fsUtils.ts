@@ -43,3 +43,18 @@ export const getStringSha1 = (str: string): string => {
   hash.update(str);
   return hash.digest('hex');
 }
+
+export const getShardedDirectory = (rootDirPath: string, uniqueId: string): string => {
+  const numChars = uniqueId.length;
+  const targetDirectory = path.join(
+    rootDirPath,
+    uniqueId.charAt(numChars - 2),
+    uniqueId.charAt(numChars - 1),
+  );
+  return targetDirectory;
+};
+
+export const getFilePath = (rootDirPath: string, uniqueId: string): string => {
+  const dirPath = getShardedDirectory(uniqueId, rootDirPath);
+  return path.join(dirPath, uniqueId);
+}

@@ -1,4 +1,4 @@
-import { getImageFiles } from './fsUtils';
+import { getFilePath, getImageFiles } from './fsUtils';
 import { exifToDbItem, getExifData } from './exifUtils';
 
 import {
@@ -6,11 +6,14 @@ import {
 } from '../types';
 
 import {
-  addMediaItemToDb
+  addMediaItemToDb, setMediaItemFilePathInDb
 } from '../controllers';
 
+import {
+  getStringSha1
+} from './/fsUtils';
+
 import { mediaItemsDir } from '../app';
-import { ExifData } from 'exif';
 
 
 export const runApp = () => {
@@ -48,15 +51,19 @@ const importImageFiles = async () => {
       const exifData = await getExifData(imageFilePath);
       const dbMediaItem: DbMediaItem = exifToDbItem(imageFilePath, exifData);
 
+      // add record to db
+      const dbRecordId = await addMediaItemToDb(dbMediaItem);
+
       // get sha1
+      const sha1 = getStringSha1(dbRecordId);
 
       // get destination file path from root directory, sha1
-
+      const targetFilePath = getFilePath(mediaItemsDir, sha1);
+      
       // copy file to destination path
 
-      // add record to db
-      const retVal: any = await addMediaItemToDb(dbMediaItem);
-      // const dbRecordId: string = retVal.insertedId._id.toString();
+      // update db record with filePath
+      await setMediaItemFilePathInDb(dbRecordId, targetFilePath);
 
       imageCount++;
       if (imageCount > 10) {
