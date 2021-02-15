@@ -1,5 +1,5 @@
 import { getFilePath, getImageFiles } from './fsUtils';
-import { exifToDbItem, getExifData } from './exifUtils';
+import { exifToDbItem, getExifData, trackExifPropertyCounts } from './exifUtils';
 
 import {
   DbMediaItem
@@ -13,8 +13,10 @@ import {
   getStringSha1
 } from './/fsUtils';
 
-import { mediaItemsDir } from '../app';
+import { ExifData } from 'exif';
 
+import { mediaItemsDir } from '../app';
+import { exifPropertyCount } from './exifUtils';
 
 export const runApp = () => {
   importImageFiles();
@@ -37,7 +39,7 @@ const importImageFiles = async () => {
   const imageFiles = getImageFiles(mediaItemsDir);
   console.log(imageFiles);
 
-  let imageCount = 0;
+  // let imageCount = 0;
 
   try {
     // for each image file path
@@ -48,31 +50,43 @@ const importImageFiles = async () => {
       // const imageFilePath = '/Volumes/SHAFFEROTO/takeout/unzipped/Takeout 1/Google Photos/Summer 2018/IMG_3146.JPG';
 
       // get exif data
-      const exifData = await getExifData(imageFilePath);
-      const dbMediaItem: DbMediaItem = exifToDbItem(imageFilePath, exifData);
+
+      try {
+        const exifData: ExifData = await getExifData(imageFilePath);
+        trackExifPropertyCounts(exifData);
+      } catch (error) {
+        console.log('getExifData Error: ', error);
+      }
+
+      // const dbMediaItem: DbMediaItem = exifToDbItem(imageFilePath, exifData);
 
       // add record to db
-      const dbRecordId = await addMediaItemToDb(dbMediaItem);
+      // const dbRecordId = await addMediaItemToDb(dbMediaItem);
 
       // get sha1
-      const sha1 = getStringSha1(dbRecordId);
+      // const sha1 = getStringSha1(dbRecordId);
 
       // get destination file path from root directory, sha1
-      const targetFilePath = getFilePath(mediaItemsDir, sha1);
-      
+      // const targetFilePath = getFilePath(mediaItemsDir, sha1);
+
       // copy file to destination path
 
       // update db record with filePath
-      await setMediaItemFilePathInDb(dbRecordId, targetFilePath);
+      // await setMediaItemFilePathInDb(dbRecordId, targetFilePath);
 
-      imageCount++;
-      if (imageCount > 10) {
-        debugger;
-      }
+      // imageCount++;
+      // if (imageCount > 10) {
+      //   console.log('exifPropertyCount');
+      //   console.log(exifPropertyCount);
+      //   debugger;
+      // }
     }
+    console.log('exifPropertyCount');
+    console.log(exifPropertyCount);
+    debugger;
   } catch (error) {
     console.log('Error: ', error);
-    debugger;
+    // debugger;
   }
 }
 

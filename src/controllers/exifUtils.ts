@@ -2,7 +2,9 @@ import path from 'path';
 
 import {
   isDate,
+  isNil,
   isNumber,
+  isObject,
   isString,
 } from 'lodash';
 
@@ -70,4 +72,50 @@ export const exifToDbItem = (imageFilePath: string, exifData: ExifData): DbMedia
   }
   
   return dbMediaItem;
+}
+
+export const exifPropertyCount: any = {};
+
+exifPropertyCount['image'] = {};
+const exifImagePropertyCounts = exifPropertyCount['image'];
+
+exifPropertyCount['exif'] = {};
+const exifExifPropertyCounts = exifPropertyCount['exif'];
+
+exifPropertyCount['gps'] = {};
+const exifGpsPropertyCounts = exifPropertyCount['gps'];
+
+export const trackExifPropertyCounts = (exifData: ExifData): void => {
+  if (!isNil(exifData)) {
+    if (isObject(exifData.image)) {
+      const imageKeys: string[] = Object.keys(exifData.image);
+      for (const imageKey of imageKeys) {
+        if (isNil(exifImagePropertyCounts[imageKey])) {
+          exifImagePropertyCounts[imageKey] = 1;
+        } else {
+          exifImagePropertyCounts[imageKey] = exifImagePropertyCounts[imageKey] + 1;
+        }
+      }
+    }
+    if (isObject(exifData.exif)) {
+      const exifKeys: string[] = Object.keys(exifData.exif);
+      for (const exifKey of exifKeys) {
+        if (isNil(exifExifPropertyCounts[exifKey])) {
+          exifExifPropertyCounts[exifKey] = 1;
+        } else {
+          exifExifPropertyCounts[exifKey] = exifExifPropertyCounts[exifKey] + 1;
+        }
+      }
+    }
+    if (isObject(exifData.gps)) {
+      const gpsKeys: string[] = Object.keys(exifData.gps);
+      for (const gpsKey of gpsKeys) {
+        if (isNil(exifGpsPropertyCounts[gpsKey])) {
+          exifGpsPropertyCounts[gpsKey] = 1;
+        } else {
+          exifGpsPropertyCounts[gpsKey] = exifGpsPropertyCounts[gpsKey] + 1;
+        }
+      }
+    }
+  }
 }
