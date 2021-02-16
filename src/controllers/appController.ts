@@ -2,7 +2,10 @@ import { getFilePath, getImageFiles } from './fsUtils';
 import { 
   // exifToDbItem, 
   getExifData, 
-  trackExifPropertyCounts
+  trackExifPropertyCounts,
+  missingExifDataCount,
+  missingImageSizeDataCount,
+  missingImageSizeKeyCount,
  } from './exifUtils';
 
  import { 
@@ -48,8 +51,8 @@ const importImageFiles = async () => {
   const imageFiles = getImageFiles(mediaItemsDir);
   console.log(imageFiles);
 
-  let imageCount = 0;
-
+  // let imageCount = 0;
+  
   try {
     // for each image file path
     for (const imageFile of imageFiles) {
@@ -62,8 +65,8 @@ const importImageFiles = async () => {
 
       try {
         const exifData: ExifData = await getExifData(imageFilePath);
-        console.log(exifData);
-        trackExifPropertyCounts(exifData);
+        // console.log(exifData);
+        trackExifPropertyCounts(exifData, imageFilePath);
       } catch (error) {
         console.log('getExifData Error: ', error);
       }
@@ -84,15 +87,21 @@ const importImageFiles = async () => {
       // update db record with filePath
       // await setMediaItemFilePathInDb(dbRecordId, targetFilePath);
 
-      imageCount++;
-      if (imageCount > 100) {
-        console.log('exifPropertyCount');
-        console.log(exifPropertyCount);
-        debugger;
-      }
+      // imageCount++;
+      // if (imageCount > 100) {
+      //   console.log('exifPropertyCount');
+      //   console.log(exifPropertyCount);
+      //   debugger;
+      // }
     }
     console.log('exifPropertyCount');
     console.log(exifPropertyCount);
+    console.log('missingExifDataCount');
+    console.log(missingExifDataCount);
+    console.log('missingImageSizeDataCount');
+    console.log(missingImageSizeDataCount);
+    console.log('missingImageSizeKeyCount');
+    console.log(missingImageSizeKeyCount);
     debugger;
   } catch (error) {
     console.log('Error: ', error);

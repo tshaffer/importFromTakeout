@@ -21,7 +21,7 @@ export const getExifData = async (filePath: string): Promise<ExifData> => {
   try {
     const data: Buffer = await getFileBuffer(filePath);
     const exifData: ExifData = ExifParserFactory.create(data).parse();
-    console.log(exifData);
+    // console.log(exifData);
     return exifData;
   } catch (error) {
     console.log('getExifData error: ', error);
@@ -83,13 +83,20 @@ const exifImagePropertyCounts = exifPropertyCount['image'];
 exifPropertyCount['exif'] = {};
 const exifExifPropertyCounts = exifPropertyCount['exif'];
 
-exifPropertyCount['gps'] = {};
-const exifGpsPropertyCounts = exifPropertyCount['gps'];
+// exifPropertyCount['gps'] = {};
+// const exifGpsPropertyCounts = exifPropertyCount['gps'];
 
-export const trackExifPropertyCounts = (exifData: ExifData): void => {
+export let missingExifDataCount = 0;
+export let missingImageSizeDataCount = 0;
+export let missingImageSizeKeyCount = 0;
+
+export const trackExifPropertyCounts = (exifData: ExifData, filePath: string): void => {
   if (!isNil(exifData)) {
     if (isObject(exifData.imageSize)) {
       const imageKeys: string[] = Object.keys(exifData.imageSize);
+      if (imageKeys.length === 0) {
+        missingImageSizeKeyCount++;
+      }
       for (const imageKey of imageKeys) {
         if (isNil(exifImagePropertyCounts[imageKey])) {
           exifImagePropertyCounts[imageKey] = 1;
@@ -97,6 +104,9 @@ export const trackExifPropertyCounts = (exifData: ExifData): void => {
           exifImagePropertyCounts[imageKey] = exifImagePropertyCounts[imageKey] + 1;
         }
       }
+    } else {
+      console.log('no imageSize data for: ', filePath);
+      missingImageSizeDataCount++;
     }
     if (isObject(exifData.tags)) {
       const exifKeys: string[] = Object.keys(exifData.tags);
@@ -107,6 +117,15 @@ export const trackExifPropertyCounts = (exifData: ExifData): void => {
           exifExifPropertyCounts[exifKey] = exifExifPropertyCounts[exifKey] + 1;
         }
       }
+      // if (!isNil(exifData.tags.ImageWidth)) {
+      //   console.log('exifData.tags.ImageWidth for : ', filePath, ' is: ', exifData.tags.ImageWidth);
+      // }
+      // if (!isNil(exifData.tags.ImageHeight)) {
+      //   console.log('exifData.tags.ImageHeight for : ', filePath, ' is: ', exifData.tags.ImageHeight);
+      // }
     }
+  } else {
+    console.log('no exifData for: ', filePath);
+    missingExifDataCount++;
   }
 }
