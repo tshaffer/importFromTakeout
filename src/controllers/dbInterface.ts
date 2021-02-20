@@ -1,4 +1,4 @@
-import { DbMediaItem } from "../types";
+import { DbMediaItem, GPhotosMediaItem } from "../types";
 import Mediaitem from '../models/Mediaitem';
 import { Model, Query, Document } from "mongoose";
 
@@ -34,11 +34,11 @@ export const findMe = async (): Promise<any[]> => {
   // result[0].toObject() gives pojo
 }
 
-export const findPhotosByName = async (fileName: string): Promise<any[]> => {
-  const records: any[] = [];
+export const findGPhotosByName = async (fileName: string): Promise<GPhotosMediaItem[]> => {
+  const mediaItems: GPhotosMediaItem[] = [];
   const documents: any = await Mediaitem.find( { fileName: fileName }).exec();
   for (const document of documents) {
-    records.push(document.toObject());
+    mediaItems.push(document.toObject());
   }
-  return records;
+  return mediaItems;
 }

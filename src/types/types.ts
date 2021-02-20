@@ -12,3 +12,29 @@ export interface DbMediaItem {
   gpsLatitude?:number;
   gpsLongitude?:number;
 }
+
+export interface GPhotosMediaItem {
+  id: string;
+  baseUrl: string;
+  fileName: string;
+  downloaded: boolean;
+  filePath: string;
+  productUrl: string;
+  mimeType: string;
+  creationTime: string;
+  width: number;
+  height: number;
+}
+
+export interface DateTimeMatchResultsType {
+  noDateTimeDataCount: number;
+  noDateTimeMatchFound: number;
+  dateTimeWithinMinFound: number;
+  dateTimeWithinMaxFound: number;
+}
+
+export interface MatchResultsType {
+  noNameMatchesFound: number;
+  singleNameMatchesFound: number;
+  multipleNameMatchesFound: number;
+}

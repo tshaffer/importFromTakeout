@@ -21,7 +21,8 @@ import {
 // } from "ts-exif-parser";
 
 import {
-  DbMediaItem
+  DateTimeMatchResultsType,
+  DbMediaItem, GPhotosMediaItem, MatchResultsType
 } from '../types';
 
 import {
@@ -36,7 +37,7 @@ import {
 
 import { mediaItemsDir } from '../app';
 import { exifPropertyCount } from './exifUtils';
-import { findMe, findPhotosByName } from './dbInterface';
+import { findMe, findGPhotosByName } from './dbInterface';
 import { isNil, isNumber, isObject, isString } from 'lodash';
 
 export const runApp = () => {
@@ -134,6 +135,9 @@ const importImageFiles = async () => {
 //   console.log('Error: ' + error.message);
 // }
 
+let matchResultsType: MatchResultsType;
+let dateTimeMatchResultsType: DateTimeMatchResultsType;
+
 const runMatchExperiments = async () => {
 
   let dateTimeOriginal: any;
@@ -145,8 +149,28 @@ const runMatchExperiments = async () => {
 
   const imageFilePaths: string[] = getImageFilePaths(mediaItemsDir);
   for (const imageFilePath of imageFilePaths) {
+
     const imageFileName: string = getFileName(imageFilePath);
     try {
+
+      const photos: GPhotosMediaItem[] = await findGPhotosByName(imageFileName);
+      if (photos.length === 1) {
+        // one match found
+        matchResultsType.singleNameMatchesFound++;
+      } else if (photos.length === 0) {
+        // no match found
+        matchResultsType.noNameMatchesFound++;
+      } else {
+
+        for (const photo of photos) {
+          // Date.parse(photos[0].creationTime) => number that may match createDateTs, etc.
+        }
+      }
+
+
+
+
+
       const exifData: Tags = await getExifData(imageFilePath);
 
       if (!isNil(exifData.DateTimeOriginal)) {
@@ -174,7 +198,10 @@ const runMatchExperiments = async () => {
         }
       }
 
-      const photos = await findPhotosByName(imageFileName);
+      // const photos: any[] = await findPhotosByName(imageFileName);
+      // for (const photo of photos) {
+      //   // Date.parse(photos[0].creationTime) => number that may match createDateTs, etc.
+      // }
       debugger;
 
     } catch (error) {
@@ -186,4 +213,57 @@ const runMatchExperiments = async () => {
   // const records = await findMe();
   // console.log(records);
   // debugger;
+}
+
+const getDateTimeSinceZero = (dt: any): number => {
+  let ts = -1;
+  if (!isNil(dt)) {
+    if (isString(dt)) {
+      ts = Date.parse(dt);
+    } else {
+      ts = Date.parse((dt as ExifDateTime).toISOString());
+    }
+  }
+  return ts;
+}
+const getDateTimeMatchResultsType = async (filePath: string): Promise<any> => {
+
+  let ts: number;
+
+  let dateTimeOriginal: any;
+  let dateTimeOriginalTs: number;
+  let modifyDate: any;
+  let modifyDateTs: number;
+  let createDate: any;
+  let createDateTs: number;
+
+  const exifData: Tags = await getExifData(filePath);
+
+  ts = getDateTimeSinceZero(exifData.DateTimeOriginal);
+
+  if (!isNil(exifData.DateTimeOriginal)) {
+    dateTimeOriginal = exifData.DateTimeOriginal;
+    if (isString(dateTimeOriginal)) {
+      dateTimeOriginalTs = Date.parse(dateTimeOriginal);
+    } else {
+      dateTimeOriginalTs = Date.parse((dateTimeOriginal as ExifDateTime).toISOString());
+    }
+  }
+  if (!isNil(exifData.ModifyDate)) {
+    modifyDate = exifData.ModifyDate;
+    if (isString(modifyDate)) {
+      modifyDateTs = Date.parse(modifyDate);
+    } else {
+      modifyDateTs = Date.parse((modifyDate as ExifDateTime).toISOString());
+    }
+  }
+  if (!isNil(exifData.CreateDate)) {
+    createDate = exifData.CreateDate;
+    if (isString(createDate)) {
+      createDateTs = Date.parse(createDate);
+    } else {
+      createDateTs = Date.parse((createDate as ExifDateTime).toISOString());
+    }
+  }
+
 }
