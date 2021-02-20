@@ -33,3 +33,12 @@ export const findMe = async (): Promise<any[]> => {
 
   // result[0].toObject() gives pojo
 }
+
+export const findPhotosByName = async (fileName: string): Promise<any[]> => {
+  const records: any[] = [];
+  const documents: any = await Mediaitem.find( { fileName: fileName }).exec();
+  for (const document of documents) {
+    records.push(document.toObject());
+  }
+  return records;
+}

@@ -1,4 +1,4 @@
-import { getFilePath, getImageFiles } from './fsUtils';
+import { getFileName, getFilePath, getImageFilePaths } from './fsUtils';
 import {
   // exifToDbItem, 
   getExifData,
@@ -29,7 +29,8 @@ import {
 
 import { mediaItemsDir } from '../app';
 import { exifPropertyCount } from './exifUtils';
-import { findMe } from './dbInterface';
+import { findMe, findPhotosByName } from './dbInterface';
+import { isNumber, isObject } from 'lodash';
 
 export const runApp = () => {
   // comment out standard functionality to try matching experiments
@@ -52,14 +53,14 @@ const importImageFiles = async () => {
   */
 
   // get list of image file paths
-  const imageFiles = getImageFiles(mediaItemsDir);
-  console.log(imageFiles);
+  const imageFilePaths: string[] = getImageFilePaths(mediaItemsDir);
+  console.log(imageFilePaths);
 
   // let imageCount = 0;
 
   try {
     // for each image file path
-    for (const imageFile of imageFiles) {
+    for (const imageFile of imageFilePaths) {
 
       const imageFilePath = imageFile;
       // const imageFilePath = '/Volumes/SHAFFEROTO/takeout/unzipped/Takeout 15/Google Photos/Photos from 2020/IMG_4464.JPG';
@@ -127,7 +128,37 @@ const importImageFiles = async () => {
 // }
 
 const runMatchExperiments = async () => {
-  const records = await findMe();
-  console.log(records);
-  debugger;
+
+  let dateTimeOriginal: Date;
+  let modifyDate: Date;
+  let createDate: Date;
+
+  const imageFilePaths: string[] = getImageFilePaths(mediaItemsDir);
+  for (const imageFilePath of imageFilePaths) {
+    const imageFileName: string = getFileName(imageFilePath);
+    try {
+      const exifData: ExifData = await getExifData(imageFilePath);
+
+      if (isObject(exifData.tags) && isNumber(exifData.tags.DateTimeOriginal)) {
+        dateTimeOriginal = new Date(exifData.tags.DateTimeOriginal);
+      }
+      if (isObject(exifData.tags) && isNumber(exifData.tags.ModifyDate)) {
+        modifyDate = new Date(exifData.tags.ModifyDate);
+      }
+      if (isObject(exifData.tags) && isNumber(exifData.tags.CreateDate)) {
+        createDate = new Date(exifData.tags.CreateDate);
+      }
+
+      const photos = await findPhotosByName(imageFileName);
+      debugger;
+
+    } catch (error) {
+      console.log('getExifData Error: ', error);
+    }
+
+  }
+
+  // const records = await findMe();
+  // console.log(records);
+  // debugger;
 }

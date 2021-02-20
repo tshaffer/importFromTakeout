@@ -10,7 +10,7 @@ const getFilesInDirectory = (rootDirPath: string) => {
   return nodeDir.files(rootDirPath, { sync: true });
 }
 
-export const getImageFiles = (rootPath: string) => {
+export const getImageFilePaths = (rootPath: string): string[] => {
   const imageFiles: string[] = [];
   const files = getFilesInDirectory(rootPath);
   // TEDTODO - use regex?
@@ -80,4 +80,8 @@ export const getFileBuffer = (filePath: string): Promise<Buffer> => {
       }
     })
   });
+}
+
+export const getFileName = (filePath: string): string => {
+  return path.basename(filePath);
 }
