@@ -2,7 +2,7 @@ import { getFileName, getFilePath, getImageFilePaths } from './fsUtils';
 import {
   // exifToDbItem, 
   getExifData,
-  trackExifPropertyCounts,
+  // trackExifPropertyCounts,
   missingExifDataCount,
   missingImageSizeDataCount,
   missingImageSizeKeyCount,
@@ -68,13 +68,13 @@ const importImageFiles = async () => {
 
       // get exif data
 
-      try {
-        const exifData: ExifData = await getExifData(imageFilePath);
-        // console.log(exifData);
-        trackExifPropertyCounts(exifData, imageFilePath);
-      } catch (error) {
-        console.log('getExifData Error: ', error);
-      }
+      // try {
+      //   const exifData: ExifData = await getExifData(imageFilePath);
+      //   // console.log(exifData);
+      //   trackExifPropertyCounts(exifData, imageFilePath);
+      // } catch (error) {
+      //   console.log('getExifData Error: ', error);
+      // }
 
       // const dbMediaItem: DbMediaItem = exifToDbItem(imageFilePath, exifData);
 
