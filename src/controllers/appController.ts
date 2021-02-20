@@ -1,17 +1,17 @@
 import { getFilePath, getImageFiles } from './fsUtils';
-import { 
+import {
   // exifToDbItem, 
-  getExifData, 
+  getExifData,
   trackExifPropertyCounts,
   missingExifDataCount,
   missingImageSizeDataCount,
   missingImageSizeKeyCount,
- } from './exifUtils';
+} from './exifUtils';
 
- import { 
+import {
   ExifData,
   ExifParserFactory,
- } from "ts-exif-parser";
+} from "ts-exif-parser";
 
 import {
   DbMediaItem
@@ -29,9 +29,13 @@ import {
 
 import { mediaItemsDir } from '../app';
 import { exifPropertyCount } from './exifUtils';
+import { findMe } from './dbInterface';
 
 export const runApp = () => {
-  importImageFiles();
+  // comment out standard functionality to try matching experiments
+  // importImageFiles();
+
+  runMatchExperiments();
 }
 
 const importImageFiles = async () => {
@@ -52,7 +56,7 @@ const importImageFiles = async () => {
   console.log(imageFiles);
 
   // let imageCount = 0;
-  
+
   try {
     // for each image file path
     for (const imageFile of imageFiles) {
@@ -109,16 +113,21 @@ const importImageFiles = async () => {
   }
 }
 
-  // const filePath = '/Volumes/SHAFFEROTO/takeout/unzipped/Takeout 15/Google Photos/Photos from 2020/IMG_4464.JPG';
+// const filePath = '/Volumes/SHAFFEROTO/takeout/unzipped/Takeout 15/Google Photos/Photos from 2020/IMG_4464.JPG';
 
-  // try {
-  //   new ExifImage({ image: filePath }, function (error: any, exifData: any) {
-  //     if (error)
-  //       console.log('Error: ' + error.message);
-  //     else
-  //       console.log(exifData); // Do something with your data!
-  //   });
-  // } catch (error) {
-  //   console.log('Error: ' + error.message);
-  // }
+// try {
+//   new ExifImage({ image: filePath }, function (error: any, exifData: any) {
+//     if (error)
+//       console.log('Error: ' + error.message);
+//     else
+//       console.log(exifData); // Do something with your data!
+//   });
+// } catch (error) {
+//   console.log('Error: ' + error.message);
+// }
 
+const runMatchExperiments = async () => {
+  const records = await findMe();
+  console.log(records);
+  debugger;
+}
