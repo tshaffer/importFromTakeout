@@ -159,9 +159,9 @@ const runMatchExperiments = async () => {
   for (const imageFilePath of imageFilePaths) {
 
     if (fileCount >= 10) {
+      debugger;
       console.log(matchResultsType);
       console.log(dateTimeMatchResultsType);
-      debugger;
     }
 
     try {
@@ -174,48 +174,64 @@ const runMatchExperiments = async () => {
       } else if (photos.length === 0) {
         matchResultsType.noNameMatchesFound++;
       } else {
-        for (const photo of photos) {
-          const resultType: MatchResultType = await getDateTimeMatchResultsType(photo.creationTime, imageFilePath);
-          switch (resultType) {
-            case MatchResultType.MinMatchFound:
-              dateTimeMatchResultsType.dateTimeWithinMinFound++;
-              matchResultsType.dateMatchFoundInMultiple++;
-              break;
-            case MatchResultType.MaxMatchFound:
-              dateTimeMatchResultsType.dateTimeWithinMaxFound++;
-              matchResultsType.dateMatchFoundInMultiple++;
-              break;
-            case MatchResultType.NoMatchFound:
-              dateTimeMatchResultsType.noDateTimeMatchFound++;
-              matchResultsType.noDateMatchFoundInMultiple++;
-              break;
-            case MatchResultType.NoDateFound:
-            default:
-              dateTimeMatchResultsType.noDateTimeDataCount++;
-              matchResultsType.noDateMatchFoundInMultiple++;
-              break;
-          }
+        const resultType: MatchResultType = await getDateTimeMatchForPhotosWithSameName(imageFilePath, photos);
+        switch (resultType) {
+          case MatchResultType.MinMatchFound:
+            dateTimeMatchResultsType.dateTimeWithinMinFound++;
+            matchResultsType.dateMatchFoundInMultiple++;
+            break;
+          case MatchResultType.MaxMatchFound:
+            dateTimeMatchResultsType.dateTimeWithinMaxFound++;
+            matchResultsType.dateMatchFoundInMultiple++;
+            break;
+          case MatchResultType.NoMatchFound:
+            dateTimeMatchResultsType.noDateTimeMatchFound++;
+            matchResultsType.noDateMatchFoundInMultiple++;
+            break;
+          case MatchResultType.NoDateFound:
+          default:
+            dateTimeMatchResultsType.noDateTimeDataCount++;
+            matchResultsType.noDateMatchFoundInMultiple++;
+            break;
         }
       }
 
       fileCount++;
 
-    } catch (error) {
-      console.log('runMatchExperiments Error: ', error);
-    }
+  } catch (error) {
+    console.log('runMatchExperiments Error: ', error);
   }
 }
+}
 
-const getDateTimeSinceZero = (dt: any): number => {
-  let ts = -1;
-  if (!isNil(dt)) {
-    if (isString(dt)) {
-      ts = Date.parse(dt);
-    } else {
-      ts = Date.parse((dt as ExifDateTime).toISOString());
+const getDateTimeMatchForPhotosWithSameName = async (imageFilePath: string, photos: GPhotosMediaItem[]): Promise<MatchResultType> => {
+  
+  let maxMatchFound = false;
+  let dateFound = false;
+
+  for (const photo of photos) {
+    const resultType: MatchResultType = await getDateTimeMatchResultsType(photo.creationTime, imageFilePath);
+    switch (resultType) {
+      case MatchResultType.MinMatchFound:
+        return MatchResultType.MinMatchFound;
+      case MatchResultType.MaxMatchFound:
+        maxMatchFound = true;
+      case MatchResultType.NoMatchFound:
+        dateFound = true;
+        break;
+      case MatchResultType.NoDateFound:
+      default:
+        break;
     }
   }
-  return ts;
+  if (maxMatchFound) {
+    return MatchResultType.MaxMatchFound;
+  }
+  else if (dateFound) {
+    return MatchResultType.NoMatchFound;
+  } else {
+    return MatchResultType.NoDateFound;
+  }
 }
 
 const max = 1000;
@@ -224,10 +240,6 @@ const min = 100;
 const getDateTimeMatchResultsType = async (gPhotoCreationTimeSpec: string, filePath: string): Promise<MatchResultType> => {
 
   let ts: number;
-
-  // let dateTimeOriginalTs: number;
-  // let modifyDateTs: number;
-  // let createDateTs: number;
 
   const gPhotoCreationTime: number = Date.parse(gPhotoCreationTimeSpec);
 
@@ -275,3 +287,16 @@ const getDateTimeMatchResultsType = async (gPhotoCreationTimeSpec: string, fileP
     return MatchResultType.NoDateFound;
   }
 }
+
+const getDateTimeSinceZero = (dt: any): number => {
+  let ts = -1;
+  if (!isNil(dt)) {
+    if (isString(dt)) {
+      ts = Date.parse(dt);
+    } else {
+      ts = Date.parse((dt as ExifDateTime).toISOString());
+    }
+  }
+  return ts;
+}
+
