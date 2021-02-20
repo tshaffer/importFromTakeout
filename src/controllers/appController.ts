@@ -22,7 +22,8 @@ import {
 
 import {
   DateTimeMatchResultsType,
-  DbMediaItem, GPhotosMediaItem, MatchResultsType
+  DbMediaItem, GPhotosMediaItem, MatchResultsType,
+  MatchResultType,
 } from '../types';
 
 import {
@@ -135,84 +136,74 @@ const importImageFiles = async () => {
 //   console.log('Error: ' + error.message);
 // }
 
-let matchResultsType: MatchResultsType;
-let dateTimeMatchResultsType: DateTimeMatchResultsType;
+let matchResultsType: MatchResultsType = {
+  noNameMatchesFound: 0,
+  singleNameMatchesFound: 0,
+  dateMatchFoundInMultiple: 0,
+  noDateMatchFoundInMultiple: 0,
+};
+
+let dateTimeMatchResultsType: DateTimeMatchResultsType = {
+  noDateTimeDataCount: 0,
+  noDateTimeMatchFound: 0,
+  dateTimeWithinMinFound: 0,
+  dateTimeWithinMaxFound: 0,
+};
 
 const runMatchExperiments = async () => {
 
-  let dateTimeOriginal: any;
-  let dateTimeOriginalTs: number;
-  let modifyDate: any;
-  let modifyDateTs: number;
-  let createDate: any;
-  let createDateTs: number;
+  let fileCount = 0;
 
   const imageFilePaths: string[] = getImageFilePaths(mediaItemsDir);
+
   for (const imageFilePath of imageFilePaths) {
 
-    const imageFileName: string = getFileName(imageFilePath);
-    try {
-
-      const photos: GPhotosMediaItem[] = await findGPhotosByName(imageFileName);
-      if (photos.length === 1) {
-        // one match found
-        matchResultsType.singleNameMatchesFound++;
-      } else if (photos.length === 0) {
-        // no match found
-        matchResultsType.noNameMatchesFound++;
-      } else {
-
-        for (const photo of photos) {
-          // Date.parse(photos[0].creationTime) => number that may match createDateTs, etc.
-        }
-      }
-
-
-
-
-
-      const exifData: Tags = await getExifData(imageFilePath);
-
-      if (!isNil(exifData.DateTimeOriginal)) {
-        dateTimeOriginal = exifData.DateTimeOriginal;
-        if (isString(dateTimeOriginal)) {
-          dateTimeOriginalTs = Date.parse(dateTimeOriginal);
-        } else {
-          dateTimeOriginalTs = Date.parse((dateTimeOriginal as ExifDateTime).toISOString());
-        }
-      }
-      if (!isNil(exifData.ModifyDate)) {
-        modifyDate = exifData.ModifyDate;
-        if (isString(modifyDate)) {
-          modifyDateTs = Date.parse(modifyDate);
-        } else {
-          modifyDateTs = Date.parse((modifyDate as ExifDateTime).toISOString());
-        }
-      }
-      if (!isNil(exifData.CreateDate)) {
-        createDate = exifData.CreateDate;
-        if (isString(createDate)) {
-          createDateTs = Date.parse(createDate);
-        } else {
-          createDateTs = Date.parse((createDate as ExifDateTime).toISOString());
-        }
-      }
-
-      // const photos: any[] = await findPhotosByName(imageFileName);
-      // for (const photo of photos) {
-      //   // Date.parse(photos[0].creationTime) => number that may match createDateTs, etc.
-      // }
+    if (fileCount >= 10) {
+      console.log(matchResultsType);
+      console.log(dateTimeMatchResultsType);
       debugger;
-
-    } catch (error) {
-      console.log('getExifData Error: ', error);
     }
 
-  }
+    try {
 
-  // const records = await findMe();
-  // console.log(records);
-  // debugger;
+      const imageFileName: string = getFileName(imageFilePath);
+      const photos: GPhotosMediaItem[] = await findGPhotosByName(imageFileName);
+
+      if (photos.length === 1) {
+        matchResultsType.singleNameMatchesFound++;
+      } else if (photos.length === 0) {
+        matchResultsType.noNameMatchesFound++;
+      } else {
+        for (const photo of photos) {
+          const resultType: MatchResultType = await getDateTimeMatchResultsType(photo.creationTime, imageFilePath);
+          switch (resultType) {
+            case MatchResultType.MinMatchFound:
+              dateTimeMatchResultsType.dateTimeWithinMinFound++;
+              matchResultsType.dateMatchFoundInMultiple++;
+              break;
+            case MatchResultType.MaxMatchFound:
+              dateTimeMatchResultsType.dateTimeWithinMaxFound++;
+              matchResultsType.dateMatchFoundInMultiple++;
+              break;
+            case MatchResultType.NoMatchFound:
+              dateTimeMatchResultsType.noDateTimeMatchFound++;
+              matchResultsType.noDateMatchFoundInMultiple++;
+              break;
+            case MatchResultType.NoDateFound:
+            default:
+              dateTimeMatchResultsType.noDateTimeDataCount++;
+              matchResultsType.noDateMatchFoundInMultiple++;
+              break;
+          }
+        }
+      }
+
+      fileCount++;
+
+    } catch (error) {
+      console.log('runMatchExperiments Error: ', error);
+    }
+  }
 }
 
 const getDateTimeSinceZero = (dt: any): number => {
@@ -226,44 +217,61 @@ const getDateTimeSinceZero = (dt: any): number => {
   }
   return ts;
 }
-const getDateTimeMatchResultsType = async (filePath: string): Promise<any> => {
+
+const max = 1000;
+const min = 100;
+
+const getDateTimeMatchResultsType = async (gPhotoCreationTimeSpec: string, filePath: string): Promise<MatchResultType> => {
 
   let ts: number;
 
-  let dateTimeOriginal: any;
-  let dateTimeOriginalTs: number;
-  let modifyDate: any;
-  let modifyDateTs: number;
-  let createDate: any;
-  let createDateTs: number;
+  // let dateTimeOriginalTs: number;
+  // let modifyDateTs: number;
+  // let createDateTs: number;
+
+  const gPhotoCreationTime: number = Date.parse(gPhotoCreationTimeSpec);
 
   const exifData: Tags = await getExifData(filePath);
 
+  let maxMatchFound = false;
+  let exifDateTimeFound = false;
+
   ts = getDateTimeSinceZero(exifData.DateTimeOriginal);
-
-  if (!isNil(exifData.DateTimeOriginal)) {
-    dateTimeOriginal = exifData.DateTimeOriginal;
-    if (isString(dateTimeOriginal)) {
-      dateTimeOriginalTs = Date.parse(dateTimeOriginal);
-    } else {
-      dateTimeOriginalTs = Date.parse((dateTimeOriginal as ExifDateTime).toISOString());
-    }
-  }
-  if (!isNil(exifData.ModifyDate)) {
-    modifyDate = exifData.ModifyDate;
-    if (isString(modifyDate)) {
-      modifyDateTs = Date.parse(modifyDate);
-    } else {
-      modifyDateTs = Date.parse((modifyDate as ExifDateTime).toISOString());
-    }
-  }
-  if (!isNil(exifData.CreateDate)) {
-    createDate = exifData.CreateDate;
-    if (isString(createDate)) {
-      createDateTs = Date.parse(createDate);
-    } else {
-      createDateTs = Date.parse((createDate as ExifDateTime).toISOString());
+  if (ts >= 0) {
+    exifDateTimeFound = true;
+    if (Math.abs(gPhotoCreationTime - ts) < min) {
+      return MatchResultType.MinMatchFound;
+    } else if (Math.abs(gPhotoCreationTime - ts) < max) {
+      maxMatchFound = true;
     }
   }
 
+  ts = getDateTimeSinceZero(exifData.ModifyDate);
+  if (ts >= 0) {
+    exifDateTimeFound = true;
+    if (Math.abs(gPhotoCreationTime - ts) < min) {
+      return MatchResultType.MinMatchFound;
+    } else if (Math.abs(gPhotoCreationTime - ts) < max) {
+      maxMatchFound = true;
+    }
+  }
+
+  ts = getDateTimeSinceZero(exifData.CreateDate);
+  if (ts >= 0) {
+    exifDateTimeFound = true;
+    if (Math.abs(gPhotoCreationTime - ts) < min) {
+      return MatchResultType.MinMatchFound;
+    } else if (Math.abs(gPhotoCreationTime - ts) < max) {
+      maxMatchFound = true;
+    }
+  }
+
+  if (maxMatchFound) {
+    return MatchResultType.MaxMatchFound;
+  }
+  else if (exifDateTimeFound) {
+    return MatchResultType.NoMatchFound;
+  } else {
+    return MatchResultType.NoDateFound;
+  }
 }

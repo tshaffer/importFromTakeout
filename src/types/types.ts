@@ -36,5 +36,14 @@ export interface DateTimeMatchResultsType {
 export interface MatchResultsType {
   noNameMatchesFound: number;
   singleNameMatchesFound: number;
-  multipleNameMatchesFound: number;
+  // multipleNameMatchesFound: number;
+  dateMatchFoundInMultiple: number;
+  noDateMatchFoundInMultiple: number;
+}
+
+export enum MatchResultType {
+  MinMatchFound = 'MinMatchFound',
+  MaxMatchFound = 'MaxMatchFound',
+  NoMatchFound = 'NoMatchFound',
+  NoDateFound = 'NoDateFound',
 }
