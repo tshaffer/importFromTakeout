@@ -8,38 +8,18 @@ import {
   isString,
 } from 'lodash';
 
-const exiftool = require("exiftool-vendored").exiftool
+import {
+  exiftool,
+  Tags
+} from 'exiftool-vendored';
 
 export const getExifData = async (filePath: string): Promise<any> => {
-  const promise: Promise<any> = exiftool.version();
-  return promise
-    .then((version: string) => {
-      console.log(`We're running ExifTool v${version}`);
-      debugger;
-      return 'pizza';
-    });
+  const tags: Tags = await exiftool.read(filePath);
+  return tags;
 };
-
-// import {
-//   ExifData,
-//   ExifParserFactory,
-//   ExifTags,
-// } from "ts-exif-parser";
 
 import { DbMediaItem } from '../types';
 import { getFileBuffer } from './fsUtils';
-
-// export const getExifData = async (filePath: string): Promise<ExifData> => {
-//   try {
-//     const data: Buffer = await getFileBuffer(filePath);
-//     const exifData: ExifData = ExifParserFactory.create(data).parse();
-//     // console.log(exifData);
-//     return exifData;
-//   } catch (error) {
-//     console.log('getExifData error: ', error);
-//     debugger;
-//   }
-// }
 
 // export const exifToDbItem = (imageFilePath: string, exifData: ExifData): DbMediaItem => {
 

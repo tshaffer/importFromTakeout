@@ -9,9 +9,16 @@ import {
 } from './exifUtils';
 
 import {
-  ExifData,
-  ExifParserFactory,
-} from "ts-exif-parser";
+  ExifDate,
+  ExifDateTime,
+  Tags
+} from 'exiftool-vendored';
+
+
+// import {
+//   ExifData,
+//   ExifParserFactory,
+// } from "ts-exif-parser";
 
 import {
   DbMediaItem
@@ -30,7 +37,7 @@ import {
 import { mediaItemsDir } from '../app';
 import { exifPropertyCount } from './exifUtils';
 import { findMe, findPhotosByName } from './dbInterface';
-import { isNumber, isObject } from 'lodash';
+import { isNil, isNumber, isObject, isString } from 'lodash';
 
 export const runApp = () => {
   // comment out standard functionality to try matching experiments
@@ -129,24 +136,42 @@ const importImageFiles = async () => {
 
 const runMatchExperiments = async () => {
 
-  let dateTimeOriginal: Date;
-  let modifyDate: Date;
-  let createDate: Date;
+  let dateTimeOriginal: any;
+  let dateTimeOriginalTs: number;
+  let modifyDate: any;
+  let modifyDateTs: number;
+  let createDate: any;
+  let createDateTs: number;
 
   const imageFilePaths: string[] = getImageFilePaths(mediaItemsDir);
   for (const imageFilePath of imageFilePaths) {
     const imageFileName: string = getFileName(imageFilePath);
     try {
-      const exifData: ExifData = await getExifData(imageFilePath);
+      const exifData: Tags = await getExifData(imageFilePath);
 
-      if (isObject(exifData.tags) && isNumber(exifData.tags.DateTimeOriginal)) {
-        dateTimeOriginal = new Date(exifData.tags.DateTimeOriginal);
+      if (!isNil(exifData.DateTimeOriginal)) {
+        dateTimeOriginal = exifData.DateTimeOriginal;
+        if (isString(dateTimeOriginal)) {
+          dateTimeOriginalTs = Date.parse(dateTimeOriginal);
+        } else {
+          dateTimeOriginalTs = Date.parse((dateTimeOriginal as ExifDateTime).toISOString());
+        }
       }
-      if (isObject(exifData.tags) && isNumber(exifData.tags.ModifyDate)) {
-        modifyDate = new Date(exifData.tags.ModifyDate);
+      if (!isNil(exifData.ModifyDate)) {
+        modifyDate = exifData.ModifyDate;
+        if (isString(modifyDate)) {
+          modifyDateTs = Date.parse(modifyDate);
+        } else {
+          modifyDateTs = Date.parse((modifyDate as ExifDateTime).toISOString());
+        }
       }
-      if (isObject(exifData.tags) && isNumber(exifData.tags.CreateDate)) {
-        createDate = new Date(exifData.tags.CreateDate);
+      if (!isNil(exifData.CreateDate)) {
+        createDate = exifData.CreateDate;
+        if (isString(createDate)) {
+          createDateTs = Date.parse(createDate);
+        } else {
+          createDateTs = Date.parse((createDate as ExifDateTime).toISOString());
+        }
       }
 
       const photos = await findPhotosByName(imageFileName);
