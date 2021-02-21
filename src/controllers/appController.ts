@@ -150,6 +150,9 @@ let dateTimeMatchResultsType: DateTimeMatchResultsType = {
   dateTimeWithinMaxFound: 0,
 };
 
+const filePathsNoNameMatchesFound: string[] = [];
+const filePathsNoDateMatchesFound: string[] = [];
+
 const runMatchExperiments = async () => {
 
   let fileCount = 0;
@@ -158,11 +161,11 @@ const runMatchExperiments = async () => {
 
   for (const imageFilePath of imageFilePaths) {
 
-    if (fileCount >= 10) {
-      debugger;
-      console.log(matchResultsType);
-      console.log(dateTimeMatchResultsType);
-    }
+    // if (fileCount >= 100000) {
+    //   debugger;
+    //   console.log(matchResultsType);
+    //   console.log(dateTimeMatchResultsType);
+    // }
 
     try {
 
@@ -173,6 +176,10 @@ const runMatchExperiments = async () => {
         matchResultsType.singleNameMatchesFound++;
       } else if (photos.length === 0) {
         matchResultsType.noNameMatchesFound++;
+        filePathsNoNameMatchesFound.push(imageFilePath);
+        // console.log(imageFilePath);
+        // debugger;
+        // console.log(imageFilePath);
       } else {
         const resultType: MatchResultType = await getDateTimeMatchForPhotosWithSameName(imageFilePath, photos);
         switch (resultType) {
@@ -187,6 +194,7 @@ const runMatchExperiments = async () => {
           case MatchResultType.NoMatchFound:
             dateTimeMatchResultsType.noDateTimeMatchFound++;
             matchResultsType.noDateMatchFoundInMultiple++;
+            filePathsNoDateMatchesFound.push(imageFilePath);
             break;
           case MatchResultType.NoDateFound:
           default:
@@ -198,14 +206,21 @@ const runMatchExperiments = async () => {
 
       fileCount++;
 
-  } catch (error) {
-    console.log('runMatchExperiments Error: ', error);
+    } catch (error) {
+      console.log('runMatchExperiments Error: ', error);
+    }
   }
-}
+
+  debugger;
+
+  console.log(matchResultsType);
+  console.log(dateTimeMatchResultsType);
+  console.log(filePathsNoNameMatchesFound);
+  console.log(filePathsNoDateMatchesFound);
 }
 
 const getDateTimeMatchForPhotosWithSameName = async (imageFilePath: string, photos: GPhotosMediaItem[]): Promise<MatchResultType> => {
-  
+
   let maxMatchFound = false;
   let dateFound = false;
 
@@ -239,7 +254,9 @@ const min = 100;
 
 const getDateTimeMatchResultsType = async (gPhotoCreationTimeSpec: string, filePath: string): Promise<MatchResultType> => {
 
-  let ts: number;
+  let dateTimeOriginalTs: number;
+  let modifyDateTs: number;
+  let createDateTs: number;
 
   const gPhotoCreationTime: number = Date.parse(gPhotoCreationTimeSpec);
 
@@ -248,32 +265,32 @@ const getDateTimeMatchResultsType = async (gPhotoCreationTimeSpec: string, fileP
   let maxMatchFound = false;
   let exifDateTimeFound = false;
 
-  ts = getDateTimeSinceZero(exifData.DateTimeOriginal);
-  if (ts >= 0) {
+  dateTimeOriginalTs = getDateTimeSinceZero(exifData.DateTimeOriginal);
+  if (dateTimeOriginalTs >= 0) {
     exifDateTimeFound = true;
-    if (Math.abs(gPhotoCreationTime - ts) < min) {
+    if (Math.abs(gPhotoCreationTime - dateTimeOriginalTs) < min) {
       return MatchResultType.MinMatchFound;
-    } else if (Math.abs(gPhotoCreationTime - ts) < max) {
+    } else if (Math.abs(gPhotoCreationTime - dateTimeOriginalTs) < max) {
       maxMatchFound = true;
     }
   }
 
-  ts = getDateTimeSinceZero(exifData.ModifyDate);
-  if (ts >= 0) {
+  modifyDateTs = getDateTimeSinceZero(exifData.ModifyDate);
+  if (modifyDateTs >= 0) {
     exifDateTimeFound = true;
-    if (Math.abs(gPhotoCreationTime - ts) < min) {
+    if (Math.abs(gPhotoCreationTime - modifyDateTs) < min) {
       return MatchResultType.MinMatchFound;
-    } else if (Math.abs(gPhotoCreationTime - ts) < max) {
+    } else if (Math.abs(gPhotoCreationTime - modifyDateTs) < max) {
       maxMatchFound = true;
     }
   }
 
-  ts = getDateTimeSinceZero(exifData.CreateDate);
-  if (ts >= 0) {
+  createDateTs = getDateTimeSinceZero(exifData.CreateDate);
+  if (createDateTs >= 0) {
     exifDateTimeFound = true;
-    if (Math.abs(gPhotoCreationTime - ts) < min) {
+    if (Math.abs(gPhotoCreationTime - createDateTs) < min) {
       return MatchResultType.MinMatchFound;
-    } else if (Math.abs(gPhotoCreationTime - ts) < max) {
+    } else if (Math.abs(gPhotoCreationTime - createDateTs) < max) {
       maxMatchFound = true;
     }
   }
@@ -282,6 +299,7 @@ const getDateTimeMatchResultsType = async (gPhotoCreationTimeSpec: string, fileP
     return MatchResultType.MaxMatchFound;
   }
   else if (exifDateTimeFound) {
+    // debugger;
     return MatchResultType.NoMatchFound;
   } else {
     return MatchResultType.NoDateFound;
