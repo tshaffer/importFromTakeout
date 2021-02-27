@@ -45,7 +45,7 @@ export const getAllMediaItemsFromGoogle = async (authService: AuthService, nextP
       }
 
       console.log('number of googleMediaItems: ' + googleMediaItems.length);
-      console.log('nextPageToken is: ' + nextPageToken);
+      // console.log('nextPageToken is: ' + nextPageToken);
 
     } catch (err) {
       nextPageToken = null;

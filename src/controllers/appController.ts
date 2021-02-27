@@ -22,12 +22,12 @@ import {
 
 import {
   DateTimeMatchResultsType,
-  DbMediaItem, GPhotosMediaItem, MatchResultsType,
+  DbMediaItem, GoogleMediaItem, GPhotosMediaItem, MatchResultsType,
   MatchResultType,
 } from '../types';
 
 import {
-  addMediaItemToDb, setMediaItemFilePathInDb
+  addMediaItemToDb, getAllMediaItemsFromGoogle, setMediaItemFilePathInDb
 } from '../controllers';
 
 import {
@@ -40,14 +40,14 @@ import { mediaItemsDir } from '../app';
 import { exifPropertyCount } from './exifUtils';
 import { findMe, findGPhotosByName, findGPhotosByNameStartsWith } from './dbInterface';
 import { isNil, isNumber, isObject, isString } from 'lodash';
+import { AuthService } from '../auth';
 
-export const runApp = () => {
-  debugger;
+export const runApp = (authService: AuthService) => {
 
   // comment out standard functionality to try matching experiments
   // importImageFiles();
 
-  runMatchExperiments();
+  runMatchExperiments(authService);
 }
 
 const importImageFiles = async () => {
@@ -164,9 +164,54 @@ interface MatchedPhoto {
 type IdToStringArray = {
   [key: string]: MatchedPhoto[]
 }
+type IdToObject = {
+  [key: string]: any
+}
+type IdToAnyArray = {
+  [key: string]: any[]
+}
+
 const googlePhotoIdsToMatchedPhotos: IdToStringArray = {};
 
-const runMatchExperiments = async () => {
+const getGooglePhotoInfo = async (authService: AuthService) => {
+
+  const googleMediaItems: GoogleMediaItem[] = await getAllMediaItemsFromGoogle(authService);
+  console.log(googleMediaItems);
+
+  let duplicatesCount = 0;
+
+  const googleMediaItemsById: IdToObject = {};
+  const duplicateGoogleMediaItemsById: IdToObject = {};
+  for (const googleMediaItem of googleMediaItems) {
+    if (googleMediaItemsById.hasOwnProperty(googleMediaItem.id)) {
+      console.log('Found duplicate:');
+      console.log(googleMediaItem);
+      if (!duplicateGoogleMediaItemsById.hasOwnProperty(googleMediaItem.id)) {
+        duplicateGoogleMediaItemsById[googleMediaItem.id] = [];
+      }
+      duplicateGoogleMediaItemsById[googleMediaItem.id].push(googleMediaItem);
+
+      duplicatesCount++;
+    }
+    googleMediaItemsById[googleMediaItem.id] = googleMediaItem;
+  }
+  
+  const allGooglePhotoIdsStream: any = openWriteStream('/Volumes/SHAFFEROTO/takeout/unzipped/allGooglePhotos.json');
+  const allGooglePhotosStr = JSON.stringify(googleMediaItemsById);
+  writeToWriteStream(allGooglePhotoIdsStream, allGooglePhotosStr);
+  closeStream(allGooglePhotoIdsStream);
+
+  const duplicateGooglePhotoIdsStream: any = openWriteStream('/Volumes/SHAFFEROTO/takeout/unzipped/duplicateGooglePhotos.json');
+  const duplicateGooglePhotosStr = JSON.stringify(duplicateGoogleMediaItemsById);
+  writeToWriteStream(duplicateGooglePhotoIdsStream, duplicateGooglePhotosStr);
+  closeStream(duplicateGooglePhotoIdsStream);
+
+  debugger;
+}
+
+const runMatchExperiments = async (authService: AuthService) => {
+
+  await getGooglePhotoInfo(authService);
 
   const filePathsNoNameMatchesFoundStream: any = openWriteStream('/Volumes/SHAFFEROTO/takeout/unzipped/noFileNameMatches.txt');
   const filePathsNoDateMatchesFoundStream: any = openWriteStream('/Volumes/SHAFFEROTO/takeout/unzipped/noDateTimeMatches.txt');
@@ -285,7 +330,7 @@ const runMatchExperiments = async () => {
   console.log(filePathsNoDateMatchesFound);
 }
 
-const analyzegooglePhotoIdsToMatchedPhotos = async () => {
+const analyzeGooglePhotoIdsToMatchedPhotos = async () => {
 
   const totalMatches = Object.keys(googlePhotoIdsToMatchedPhotos).length;
 

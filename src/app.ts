@@ -27,7 +27,7 @@ async function main() {
   const scopes = [GooglePhotos.photosApiReadOnlyScope()];
   await authService.authenticate(scopes);
 
-  runApp();
+  runApp(authService);
 }
 
 main();
