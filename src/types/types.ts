@@ -31,6 +31,7 @@ export interface DateTimeMatchResultsType {
   noDateTimeMatchFound: number;
   dateTimeWithinMinFound: number;
   dateTimeWithinMaxFound: number;
+  dateTimeZoneMatchFound: number;
 }
 
 export interface MatchResultsType {
@@ -46,4 +47,5 @@ export enum MatchResultType {
   MaxMatchFound = 'MaxMatchFound',
   NoMatchFound = 'NoMatchFound',
   NoDateFound = 'NoDateFound',
+  TimeZoneMatchFound = 'TimeZoneMatchFound',
 }

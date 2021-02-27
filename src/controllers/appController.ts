@@ -1,4 +1,4 @@
-import { getFileName, getFilePath, getImageFilePaths } from './fsUtils';
+import { closeStream, getFileName, getFilePath, getImageFilePaths, openReadStream, openWriteStream, readStream, writeToWriteStream } from './fsUtils';
 import {
   // exifToDbItem, 
   getExifData,
@@ -38,7 +38,7 @@ import {
 
 import { mediaItemsDir } from '../app';
 import { exifPropertyCount } from './exifUtils';
-import { findMe, findGPhotosByName } from './dbInterface';
+import { findMe, findGPhotosByName, findGPhotosByNameStartsWith } from './dbInterface';
 import { isNil, isNumber, isObject, isString } from 'lodash';
 
 export const runApp = () => {
@@ -148,18 +148,37 @@ let dateTimeMatchResultsType: DateTimeMatchResultsType = {
   noDateTimeMatchFound: 0,
   dateTimeWithinMinFound: 0,
   dateTimeWithinMaxFound: 0,
+  dateTimeZoneMatchFound: 0,
 };
 
 const filePathsNoNameMatchesFound: string[] = [];
 const filePathsNoDateMatchesFound: string[] = [];
 
+const filePathsNoNameMatchesFoundStream: any = openWriteStream('/Volumes/SHAFFEROTO/takeout/unzipped/noFileNameMatches.txt');
+const filePathsNoDateMatchesFoundStream: any = openWriteStream('/Volumes/SHAFFEROTO/takeout/unzipped/noDateTimeMatches.txt');
+// const googlePhotoIdsToMatchedPhotosStream: any = openWriteStream('/Volumes/SHAFFEROTO/takeout/unzipped/googlePhotoIdsToMatchedPhotos.json');
+
+// maps photo id to list of file paths that matched it
+interface MatchedPhoto {
+  imageFilePath: string;
+  exactMatch: boolean;
+}
+type IdToStringArray = {
+  [key: string]: MatchedPhoto[]
+}
+const googlePhotoIdsToMatchedPhotos: IdToStringArray = {};
+
 const runMatchExperiments = async () => {
+
+  const googlePhotoIdsToMatchedPhotosStream: any = openReadStream('/Volumes/SHAFFEROTO/takeout/unzipped/googlePhotoIdsToMatchedPhotos.json');
+  const googlePhotoIdsToMatchedPhotosStr: string = await readStream(googlePhotoIdsToMatchedPhotosStream);
+  const googlePhotoIdsToMatchedPhotos: IdToStringArray = JSON.parse(googlePhotoIdsToMatchedPhotosStr);
 
   let fileCount = 0;
 
   const imageFilePaths: string[] = getImageFilePaths(mediaItemsDir);
 
-  for (const imageFilePath of imageFilePaths) {
+  for (let imageFilePath of imageFilePaths) {
 
     // if (fileCount >= 100000) {
     //   debugger;
@@ -169,39 +188,76 @@ const runMatchExperiments = async () => {
 
     try {
 
-      const imageFileName: string = getFileName(imageFilePath);
-      const photos: GPhotosMediaItem[] = await findGPhotosByName(imageFileName);
-
+      // imageFilePath = '/Volumes/SHAFFEROTO/takeout/unzipped/Takeout 1/Google Photos/Aspen Southwest 2012/IMG_0045.JPG';
+      // imageFilePath = '/Volumes/SHAFFEROTO/takeout/unzipped/Takeout 1/Google Photos/Trips/AGF00017.JPG';
+      // imageFilePath = '/Volumes/SHAFFEROTO/takeout/unzipped/Takeout 3/Google Photos/Rachel and Troy/IMG_0050.JPG';
+      let imageFileName: string = getFileName(imageFilePath);
+      let photos: GPhotosMediaItem[] = await findGPhotosByName(imageFileName);
+      // if (photos.length === 0) {
+      //   const photos = await findGPhotosByNameStartsWith(imageFileName);
+      //   for (const photo of photos) {
+      //     if (!googlePhotoIdsToMatchedPhotos.hasOwnProperty(photo.id)) {
+      //       googlePhotoIdsToMatchedPhotos[photo.id] = [];
+      //     }
+      //     googlePhotoIdsToMatchedPhotos[photo.id].push(imageFilePath);        
+      //   }
+      // }
+      // else if (photos.length === 1) {
       if (photos.length === 1) {
+        if (!googlePhotoIdsToMatchedPhotos.hasOwnProperty(photos[0].id)) {
+          googlePhotoIdsToMatchedPhotos[photos[0].id] = [];
+        }
+        googlePhotoIdsToMatchedPhotos[photos[0].id].push(
+          {
+            imageFilePath,
+            exactMatch: true
+          }
+        );
         matchResultsType.singleNameMatchesFound++;
       } else if (photos.length === 0) {
         matchResultsType.noNameMatchesFound++;
         filePathsNoNameMatchesFound.push(imageFilePath);
-        // console.log(imageFilePath);
-        // debugger;
-        // console.log(imageFilePath);
+        writeToWriteStream(filePathsNoNameMatchesFoundStream, imageFilePath);
       } else {
-        const resultType: MatchResultType = await getDateTimeMatchForPhotosWithSameName(imageFilePath, photos);
-        switch (resultType) {
-          case MatchResultType.MinMatchFound:
-            dateTimeMatchResultsType.dateTimeWithinMinFound++;
-            matchResultsType.dateMatchFoundInMultiple++;
-            break;
-          case MatchResultType.MaxMatchFound:
-            dateTimeMatchResultsType.dateTimeWithinMaxFound++;
-            matchResultsType.dateMatchFoundInMultiple++;
-            break;
-          case MatchResultType.NoMatchFound:
-            dateTimeMatchResultsType.noDateTimeMatchFound++;
-            matchResultsType.noDateMatchFoundInMultiple++;
-            filePathsNoDateMatchesFound.push(imageFilePath);
-            break;
-          case MatchResultType.NoDateFound:
-          default:
-            dateTimeMatchResultsType.noDateTimeDataCount++;
-            matchResultsType.noDateMatchFoundInMultiple++;
-            break;
+        const matchedId: string = await getMatchedDateTimePhotoWithSameName(imageFilePath, photos);
+        if (matchedId !== '') {
+          if (!googlePhotoIdsToMatchedPhotos.hasOwnProperty(matchedId)) {
+            googlePhotoIdsToMatchedPhotos[matchedId] = [];
+          }
+          googlePhotoIdsToMatchedPhotos[matchedId].push(
+            {
+              imageFilePath,
+              exactMatch: false
+            }
+          );
         }
+        // const resultType: MatchResultType = await getDateTimeMatchForPhotosWithSameName(imageFilePath, photos);
+        // switch (resultType) {
+        //   case MatchResultType.MinMatchFound:
+        //     console.log(googlePhotoIdsToMatchedPhotos);
+        //     dateTimeMatchResultsType.dateTimeWithinMinFound++;
+        //     matchResultsType.dateMatchFoundInMultiple++;
+        //     break;
+        //   case MatchResultType.MaxMatchFound:
+        //     dateTimeMatchResultsType.dateTimeWithinMaxFound++;
+        //     matchResultsType.dateMatchFoundInMultiple++;
+        //     break;
+        //   case MatchResultType.TimeZoneMatchFound:
+        //     dateTimeMatchResultsType.dateTimeZoneMatchFound++;
+        //     matchResultsType.dateMatchFoundInMultiple++;
+        //     break;
+        //   case MatchResultType.NoMatchFound:
+        //     dateTimeMatchResultsType.noDateTimeMatchFound++;
+        //     matchResultsType.noDateMatchFoundInMultiple++;
+        //     filePathsNoDateMatchesFound.push(imageFilePath);
+        //     writeToWriteStream(filePathsNoDateMatchesFoundStream, imageFilePath);
+        //     break;
+        //   case MatchResultType.NoDateFound:
+        //   default:
+        //     dateTimeMatchResultsType.noDateTimeDataCount++;
+        //     matchResultsType.noDateMatchFoundInMultiple++;
+        //     break;
+        // }
       }
 
       fileCount++;
@@ -213,15 +269,109 @@ const runMatchExperiments = async () => {
 
   debugger;
 
+  const googlePhotoIdsToMatchedPhotosAsStr = JSON.stringify(googlePhotoIdsToMatchedPhotos);
+  writeToWriteStream(googlePhotoIdsToMatchedPhotosStream, googlePhotoIdsToMatchedPhotosAsStr);
+  closeStream(googlePhotoIdsToMatchedPhotosStream);
+
+  closeStream(filePathsNoNameMatchesFoundStream);
+  closeStream(filePathsNoDateMatchesFoundStream);
+
   console.log(matchResultsType);
   console.log(dateTimeMatchResultsType);
   console.log(filePathsNoNameMatchesFound);
   console.log(filePathsNoDateMatchesFound);
 }
 
+const analyzegooglePhotoIdsToMatchedPhotos = async () => {
+
+  const totalMatches = Object.keys(googlePhotoIdsToMatchedPhotos).length;
+
+  let singleMatchesCount = 0;
+  let singleMatchExactCount = 0;
+  let singleMatchByDateCount = 0;
+
+  let multipleMatchesCount = 0;
+  let multipleMatchesAllExact = 0;
+  let multipleMatchesAllDate = 0;
+  let multipleMatchesNotSameType = 0;
+  let multipleMatchesFilePathIncludesPhotosFrom = 0;
+
+  for (const googleId in googlePhotoIdsToMatchedPhotos) {
+    if (Object.prototype.hasOwnProperty.call(googlePhotoIdsToMatchedPhotos, googleId)) {
+      const matchedPhotos: MatchedPhoto[] = googlePhotoIdsToMatchedPhotos[googleId];
+      if (matchedPhotos.length === 1) {
+        singleMatchesCount++;
+        if (matchedPhotos[0].exactMatch) {
+          singleMatchExactCount++;
+        } else {
+          singleMatchByDateCount++;
+        }
+      } else {
+        multipleMatchesCount++;
+        let initialMatchType: boolean = matchedPhotos[0].exactMatch;
+        let allMatchTypesIdentical = true;
+        let includesPhotosFrom = false;
+        for (const matchedPhoto of matchedPhotos) {
+          if (matchedPhoto.exactMatch !== initialMatchType) {
+            allMatchTypesIdentical = false;
+          }
+          if (!matchedPhoto.exactMatch && matchedPhotos[0].imageFilePath.includes('Photos from')) {
+            includesPhotosFrom = true;
+          }
+        }
+        if (allMatchTypesIdentical) {
+          if (initialMatchType) {
+            multipleMatchesAllExact++
+          } else {
+            multipleMatchesAllDate++;
+          }
+        } else {
+          multipleMatchesNotSameType++;
+        }
+        if (includesPhotosFrom) {
+          multipleMatchesFilePathIncludesPhotosFrom++;
+        }
+      }
+
+    }
+  }
+
+  debugger;
+
+  console.log('Total number of matches:');
+  console.log('\t' + totalMatches);
+
+  console.log('Matches to a single takeout file:');
+  console.log('\t', singleMatchesCount);
+  console.log('\t', singleMatchExactCount);
+  console.log('\t', singleMatchByDateCount);
+
+  console.log('Matches to multiple takeout files:');
+  console.log('\t', multipleMatchesCount);
+  console.log('\t', multipleMatchesAllExact);
+  console.log('\t', multipleMatchesAllDate);
+  console.log('\t', multipleMatchesNotSameType);
+  console.log('\t', multipleMatchesFilePathIncludesPhotosFrom);
+}
+const getMatchedDateTimePhotoWithSameName = async (imageFilePath: string, photos: GPhotosMediaItem[]): Promise<string> => {
+
+  for (const photo of photos) {
+    const resultType: MatchResultType = await getDateTimeMatchResultsType(photo.creationTime, imageFilePath);
+    switch (resultType) {
+      case MatchResultType.MinMatchFound:
+        return photo.id;
+      default:
+        break;
+    }
+  }
+  return '';
+}
+
+
 const getDateTimeMatchForPhotosWithSameName = async (imageFilePath: string, photos: GPhotosMediaItem[]): Promise<MatchResultType> => {
 
   let maxMatchFound = false;
+  let timeZoneMatchFound = false;
   let dateFound = false;
 
   for (const photo of photos) {
@@ -229,8 +379,12 @@ const getDateTimeMatchForPhotosWithSameName = async (imageFilePath: string, phot
     switch (resultType) {
       case MatchResultType.MinMatchFound:
         return MatchResultType.MinMatchFound;
+      case MatchResultType.TimeZoneMatchFound:
+        timeZoneMatchFound = true;
+        break;
       case MatchResultType.MaxMatchFound:
         maxMatchFound = true;
+        break;
       case MatchResultType.NoMatchFound:
         dateFound = true;
         break;
@@ -241,8 +395,9 @@ const getDateTimeMatchForPhotosWithSameName = async (imageFilePath: string, phot
   }
   if (maxMatchFound) {
     return MatchResultType.MaxMatchFound;
-  }
-  else if (dateFound) {
+  } else if (timeZoneMatchFound) {
+    return MatchResultType.TimeZoneMatchFound;
+  } else if (dateFound) {
     return MatchResultType.NoMatchFound;
   } else {
     return MatchResultType.NoDateFound;
@@ -252,6 +407,16 @@ const getDateTimeMatchForPhotosWithSameName = async (imageFilePath: string, phot
 const max = 1000;
 const min = 100;
 
+// timezone differences not accounted for - another test could be
+/*
+  minutes = exifData.<date>
+  seconds = exifData.<seconds>
+  gdt = new Date(gPhotoCreationTime)
+  gMinutes = gdt.getMinutes()
+  gSeconds = gdt.getSeconds()
+  do comparison
+*/
+
 const getDateTimeMatchResultsType = async (gPhotoCreationTimeSpec: string, filePath: string): Promise<MatchResultType> => {
 
   let dateTimeOriginalTs: number;
@@ -259,11 +424,18 @@ const getDateTimeMatchResultsType = async (gPhotoCreationTimeSpec: string, fileP
   let createDateTs: number;
 
   const gPhotoCreationTime: number = Date.parse(gPhotoCreationTimeSpec);
+  const gDateTime = new Date(gPhotoCreationTime);
+  const gMinutes = gDateTime.getMinutes();
+  const gSeconds = gDateTime.getSeconds();
 
   const exifData: Tags = await getExifData(filePath);
 
   let maxMatchFound = false;
+  let timeZoneMatchFound = false;
   let exifDateTimeFound = false;
+
+  let minutes = -1;
+  let seconds = -1;
 
   dateTimeOriginalTs = getDateTimeSinceZero(exifData.DateTimeOriginal);
   if (dateTimeOriginalTs >= 0) {
@@ -272,6 +444,14 @@ const getDateTimeMatchResultsType = async (gPhotoCreationTimeSpec: string, fileP
       return MatchResultType.MinMatchFound;
     } else if (Math.abs(gPhotoCreationTime - dateTimeOriginalTs) < max) {
       maxMatchFound = true;
+    } else {
+      if (isObject(exifData.DateTimeOriginal)) {
+        minutes = (exifData.DateTimeOriginal as ExifDateTime).minute;
+        seconds = (exifData.DateTimeOriginal as ExifDateTime).second;
+        if (minutes === gMinutes && seconds === gSeconds) {
+          timeZoneMatchFound = true;
+        }
+      }
     }
   }
 
@@ -282,6 +462,14 @@ const getDateTimeMatchResultsType = async (gPhotoCreationTimeSpec: string, fileP
       return MatchResultType.MinMatchFound;
     } else if (Math.abs(gPhotoCreationTime - modifyDateTs) < max) {
       maxMatchFound = true;
+    } else {
+      if (isObject(exifData.ModifyDate)) {
+        minutes = (exifData.ModifyDate as ExifDateTime).minute;
+        seconds = (exifData.ModifyDate as ExifDateTime).second;
+        if (minutes === gMinutes && seconds === gSeconds) {
+          timeZoneMatchFound = true;
+        }
+      }
     }
   }
 
@@ -292,17 +480,29 @@ const getDateTimeMatchResultsType = async (gPhotoCreationTimeSpec: string, fileP
       return MatchResultType.MinMatchFound;
     } else if (Math.abs(gPhotoCreationTime - createDateTs) < max) {
       maxMatchFound = true;
+    } else {
+      if (isObject(exifData.CreateDate)) {
+        minutes = (exifData.CreateDate as ExifDateTime).minute;
+        seconds = (exifData.CreateDate as ExifDateTime).second;
+        if (minutes === gMinutes && seconds === gSeconds) {
+          timeZoneMatchFound = true;
+        }
+      }
     }
   }
 
   if (maxMatchFound) {
     return MatchResultType.MaxMatchFound;
-  }
-  else if (exifDateTimeFound) {
-    // debugger;
-    return MatchResultType.NoMatchFound;
+  } else if (timeZoneMatchFound) {
+    return MatchResultType.TimeZoneMatchFound;
   } else {
-    return MatchResultType.NoDateFound;
+    if (exifDateTimeFound) {
+      // debugger;
+      return MatchResultType.NoMatchFound;
+    } else {
+      return MatchResultType.NoDateFound;
+    }
+
   }
 }
 

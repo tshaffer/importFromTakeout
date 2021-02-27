@@ -85,3 +85,39 @@ export const getFileBuffer = (filePath: string): Promise<Buffer> => {
 export const getFileName = (filePath: string): string => {
   return path.basename(filePath);
 }
+
+export const openWriteStream = (filePath: string): fs.WriteStream => {
+  let writeStream = fs.createWriteStream(filePath);
+  return writeStream;
+}
+
+export const openReadStream = (filePath: string): fs.ReadStream => {
+  let readStream = fs.createReadStream(filePath);
+  return readStream;
+}
+
+
+export const writeToWriteStream = (stream: fs.WriteStream, chunk: string) => {
+  stream.write(chunk);
+  stream.write('\n');
+}
+
+export const closeStream = (stream: fs.WriteStream) => {
+  stream.close();
+}
+
+export const readStream = async (stream: fs.ReadStream): Promise<string> => {
+
+  return new Promise((resolve, reject) => {
+
+    let str = '';
+    stream.on('data', (data) => {
+      str += data.toString();
+    });
+
+    stream.on('end', () => {
+      return resolve(str);
+    });
+
+  })
+}
