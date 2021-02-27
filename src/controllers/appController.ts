@@ -171,7 +171,7 @@ type IdToAnyArray = {
   [key: string]: any[]
 }
 
-const googlePhotoIdsToMatchedPhotos: IdToStringArray = {};
+const googlePhotoIdsToMatchedPhotos: IdToAnyArray = {};
 
 const getGooglePhotoInfo = async (authService: AuthService) => {
 
@@ -180,33 +180,28 @@ const getGooglePhotoInfo = async (authService: AuthService) => {
 
   let duplicatesCount = 0;
 
-  const googleMediaItemsById: IdToObject = {};
-  const duplicateGoogleMediaItemsById: IdToObject = {};
+  const googleMediaItemsById: IdToAnyArray = {};
+  // const duplicateGoogleMediaItemsById: IdToObject = {};
   for (const googleMediaItem of googleMediaItems) {
-    if (googleMediaItemsById.hasOwnProperty(googleMediaItem.id)) {
-      console.log('Found duplicate:');
-      console.log(googleMediaItem);
-      if (!duplicateGoogleMediaItemsById.hasOwnProperty(googleMediaItem.id)) {
-        duplicateGoogleMediaItemsById[googleMediaItem.id] = [];
-      }
-      duplicateGoogleMediaItemsById[googleMediaItem.id].push(googleMediaItem);
-
-      duplicatesCount++;
+    if (!googleMediaItemsById.hasOwnProperty(googleMediaItem.id)) {
+      googleMediaItemsById[googleMediaItem.id] = [];
     }
-    googleMediaItemsById[googleMediaItem.id] = googleMediaItem;
+    googleMediaItemsById[googleMediaItem.id].push(googleMediaItem);
   }
   
-  const allGooglePhotoIdsStream: any = openWriteStream('/Volumes/SHAFFEROTO/takeout/unzipped/allGooglePhotos.json');
-  const allGooglePhotosStr = JSON.stringify(googleMediaItemsById);
-  writeToWriteStream(allGooglePhotoIdsStream, allGooglePhotosStr);
-  closeStream(allGooglePhotoIdsStream);
+  // const allGooglePhotoIdsStream: any = openWriteStream('/Volumes/SHAFFEROTO/takeout/unzipped/allGooglePhotosIncludingDupes.json');
+  // const allGooglePhotosStr = JSON.stringify(googleMediaItemsById);
+  // writeToWriteStream(allGooglePhotoIdsStream, allGooglePhotosStr);
+  // closeStream(allGooglePhotoIdsStream);
 
-  const duplicateGooglePhotoIdsStream: any = openWriteStream('/Volumes/SHAFFEROTO/takeout/unzipped/duplicateGooglePhotos.json');
-  const duplicateGooglePhotosStr = JSON.stringify(duplicateGoogleMediaItemsById);
-  writeToWriteStream(duplicateGooglePhotoIdsStream, duplicateGooglePhotosStr);
-  closeStream(duplicateGooglePhotoIdsStream);
+  // const duplicateGooglePhotoIdsStream: any = openWriteStream('/Volumes/SHAFFEROTO/takeout/unzipped/duplicateGooglePhotos.json');
+  // const duplicateGooglePhotosStr = JSON.stringify(duplicateGoogleMediaItemsById);
+  // writeToWriteStream(duplicateGooglePhotoIdsStream, duplicateGooglePhotosStr);
+  // closeStream(duplicateGooglePhotoIdsStream);
 
+  console.log(googleMediaItemsById);
   debugger;
+  console.log(googleMediaItemsById);
 }
 
 const runMatchExperiments = async (authService: AuthService) => {
