@@ -43,8 +43,6 @@ export const findGPhotosByName = async (fileName: string): Promise<GPhotosMediaI
   return mediaItems;
 }
 
-// const escapeStringRegexp = require('escape-string-regexp');
-
 export const findGPhotosByNameStartsWith = async (fileName: string): Promise<GPhotosMediaItem[]> => {
 
   // { "Category" : /^BOND.*/ }

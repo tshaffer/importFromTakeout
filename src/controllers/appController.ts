@@ -42,6 +42,8 @@ import { findMe, findGPhotosByName, findGPhotosByNameStartsWith } from './dbInte
 import { isNil, isNumber, isObject, isString } from 'lodash';
 
 export const runApp = () => {
+  debugger;
+
   // comment out standard functionality to try matching experiments
   // importImageFiles();
 
@@ -154,10 +156,6 @@ let dateTimeMatchResultsType: DateTimeMatchResultsType = {
 const filePathsNoNameMatchesFound: string[] = [];
 const filePathsNoDateMatchesFound: string[] = [];
 
-const filePathsNoNameMatchesFoundStream: any = openWriteStream('/Volumes/SHAFFEROTO/takeout/unzipped/noFileNameMatches.txt');
-const filePathsNoDateMatchesFoundStream: any = openWriteStream('/Volumes/SHAFFEROTO/takeout/unzipped/noDateTimeMatches.txt');
-// const googlePhotoIdsToMatchedPhotosStream: any = openWriteStream('/Volumes/SHAFFEROTO/takeout/unzipped/googlePhotoIdsToMatchedPhotos.json');
-
 // maps photo id to list of file paths that matched it
 interface MatchedPhoto {
   imageFilePath: string;
@@ -169,6 +167,11 @@ type IdToStringArray = {
 const googlePhotoIdsToMatchedPhotos: IdToStringArray = {};
 
 const runMatchExperiments = async () => {
+
+  const filePathsNoNameMatchesFoundStream: any = openWriteStream('/Volumes/SHAFFEROTO/takeout/unzipped/noFileNameMatches.txt');
+  const filePathsNoDateMatchesFoundStream: any = openWriteStream('/Volumes/SHAFFEROTO/takeout/unzipped/noDateTimeMatches.txt');
+  // const googlePhotoIdsToMatchedPhotosStream: any = openWriteStream('/Volumes/SHAFFEROTO/takeout/unzipped/googlePhotoIdsToMatchedPhotos.json');
+
 
   const googlePhotoIdsToMatchedPhotosStream: any = openReadStream('/Volumes/SHAFFEROTO/takeout/unzipped/googlePhotoIdsToMatchedPhotos.json');
   const googlePhotoIdsToMatchedPhotosStr: string = await readStream(googlePhotoIdsToMatchedPhotosStream);
