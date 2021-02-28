@@ -1,4 +1,4 @@
-import { closeStream, getFileName, getFilePath, getImageFilePaths, openReadStream, openWriteStream, readStream, writeToWriteStream } from './fsUtils';
+import { closeStream, getFileName, getFilePath, getImageFilePaths, openReadStream, openWriteStream, readStream, writeJsonToFile, writeToWriteStream } from './fsUtils';
 import {
   // exifToDbItem, 
   getExifData,
@@ -161,6 +161,9 @@ interface MatchedPhoto {
   imageFilePath: string;
   exactMatch: boolean;
 }
+type IdToGoogleMediaItems = {
+  [key: string]: GoogleMediaItem[]
+}
 type IdToStringArray = {
   [key: string]: MatchedPhoto[]
 }
@@ -188,7 +191,7 @@ const getGooglePhotoInfo = async (authService: AuthService) => {
     }
     googleMediaItemsById[googleMediaItem.id].push(googleMediaItem);
   }
-  
+
   // const allGooglePhotoIdsStream: any = openWriteStream('/Volumes/SHAFFEROTO/takeout/unzipped/allGooglePhotosIncludingDupes.json');
   // const allGooglePhotosStr = JSON.stringify(googleMediaItemsById);
   // writeToWriteStream(allGooglePhotoIdsStream, allGooglePhotosStr);
@@ -199,12 +202,84 @@ const getGooglePhotoInfo = async (authService: AuthService) => {
   // writeToWriteStream(duplicateGooglePhotoIdsStream, duplicateGooglePhotosStr);
   // closeStream(duplicateGooglePhotoIdsStream);
 
-  console.log(googleMediaItemsById);
+  const success: boolean = await writeJsonToFile('/Users/tedshaffer/Documents/Projects/importFromTakeout/testResults/googleItemsById.json', googleMediaItemsById);
+  console.log(success);
+  // debugger;
+  // console.log(googleMediaItemsById);
+}
+
+const getGooglePhotosWithUniqueCreationDates = async () => {
+
+  const googleMediaItemsByUniqueCreationDate: any = {};
+  const googleMediaItemsByDuplicateCreationDate: any = {};
+
+  const googleMediaItemsStream: any = openReadStream('/Users/tedshaffer/Documents/Projects/importFromTakeout/testResults/googleMediaItemsById.json');
+  const googleMediaItemsStr: string = await readStream(googleMediaItemsStream);
+  const googleMediaItemsById: IdToGoogleMediaItems = JSON.parse(googleMediaItemsStr);
+
+  const beginningOfTime: Date = new Date('1969-01-15T16:00:00Z');
+  const beginningOfTimeStr = '1969-01-15T16:00:00Z';
+  let dupeCount = 0;
+  let beginningOfTimePhotoCount = 0;
+  let noCreationTimePhotoCount = 0;
+  for (const id in googleMediaItemsById) {
+    if (Object.prototype.hasOwnProperty.call(googleMediaItemsById, id)) {
+      const googleMediaItems: GoogleMediaItem[] = googleMediaItemsById[id];
+      const googleMediaItem: GoogleMediaItem = googleMediaItems[0];
+      if (isObject(googleMediaItems) && (isObject(googleMediaItem.mediaMetadata) && !isNil(googleMediaItem.mediaMetadata.creationTime))) {
+        const photoCreationTime: string = googleMediaItem.mediaMetadata.creationTime as unknown as string;
+        if (photoCreationTime !== beginningOfTimeStr) {
+          if (!googleMediaItemsByUniqueCreationDate.hasOwnProperty(photoCreationTime)) {
+            googleMediaItemsByUniqueCreationDate[photoCreationTime] = [];
+          } else {
+            dupeCount++;
+            if (googleMediaItemsByDuplicateCreationDate.hasOwnProperty(photoCreationTime)) {
+              googleMediaItemsByDuplicateCreationDate[photoCreationTime].push(googleMediaItem);
+            } else {
+              googleMediaItemsByDuplicateCreationDate[photoCreationTime] = googleMediaItemsByUniqueCreationDate[photoCreationTime][0];
+              googleMediaItemsByDuplicateCreationDate.push(googleMediaItem);
+              dupeCount++;
+            }
+          }
+          googleMediaItemsByUniqueCreationDate[photoCreationTime].push(googleMediaItem);
+        }
+        else {
+          console.log('found photo taken at beginning of time');
+          beginningOfTimePhotoCount++;
+        }
+      } else {
+        noCreationTimePhotoCount++;
+      }
+    }
+  }
+
+  console.log('unique non zero date count');
+  console.log(Object.keys(googleMediaItemsByUniqueCreationDate).length);
+  console.log('number of beginning of time photos');
+  console.log(beginningOfTimePhotoCount);
+  console.log('noCreationTime Photo Count');
+  console.log(noCreationTimePhotoCount);
+
+  const success: boolean = await writeJsonToFile(
+    '/Users/tedshaffer/Documents/Projects/importFromTakeout/testResults/googleMediaItemsByDuplicateCreationDate.json',
+    googleMediaItemsByDuplicateCreationDate
+  );
+  console.log(success);
+
+  console.log('number of duplicate creation dates');
+  console.log(Object.keys(googleMediaItemsByDuplicateCreationDate));
+  console.log('number of media items with duplicate creation dates');
+  console.log(dupeCount);
+
+  console.log(googleMediaItemsByUniqueCreationDate);
   debugger;
-  console.log(googleMediaItemsById);
 }
 
 const runMatchExperiments = async (authService: AuthService) => {
+
+  await getGooglePhotosWithUniqueCreationDates();
+
+  debugger;
 
   await getGooglePhotoInfo(authService);
 

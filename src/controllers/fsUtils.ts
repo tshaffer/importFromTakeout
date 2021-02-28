@@ -121,3 +121,19 @@ export const readStream = async (stream: fs.ReadStream): Promise<string> => {
 
   })
 }
+
+export const writeJsonToFile = async (filePath: string, jsonData: any): Promise<boolean> => {
+  return new Promise((resolve, reject) => {
+    const jsonContent = JSON.stringify(jsonData);
+    fs.writeFile(filePath, jsonContent, 'utf8', function (err) {
+      if (err) {
+          console.log("An error occured while writing JSON Object to File.");
+          console.log(err);
+          return reject(err);
+      }
+   
+      console.log("JSON file has been saved.");
+      return resolve(true);
+  });
+  })
+}
