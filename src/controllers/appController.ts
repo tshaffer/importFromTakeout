@@ -67,6 +67,15 @@ type IdToStringArray = {
   [key: string]: string[]
 }
 
+interface MatchedGoogleMediaItem {
+  takeoutFilePath: string;
+  googleMediaItem: GoogleMediaItem;
+}
+
+type IdToMatchedGoogleMediaItem = {
+  [key: string]: MatchedGoogleMediaItem;
+}
+
 export const runApp = (authService: AuthService) => {
 
   // comment out standard functionality to try matching experiments
@@ -403,94 +412,70 @@ const matchGooglePhotosToTakeoutPhotos = async () => {
   let singleTakeoutFilesWithSameDimensions = 0;
   let multipleTakeoutFilesWithSameDimensions = 0;
 
+  const matchedGoogleMediaItems: IdToMatchedGoogleMediaItem = {};
+  const unmatchedGoogleMediaItems: GoogleMediaItem[] = [];
+
   for (const key in googleMediaItemsById) {
     if (Object.prototype.hasOwnProperty.call(googleMediaItemsById, key)) {
       const googleMediaItems: GoogleMediaItem[] = googleMediaItemsById[key];
       for (const googleMediaItem of googleMediaItems) {
+
         if (takeoutFilesByFileName.hasOwnProperty(googleMediaItem.filename)) {
+          
           const takeoutFilePaths: string[] = takeoutFilesByFileName[googleMediaItem.filename];
+          
           if (takeoutFilePaths.length === 1) {
+            // unique file name match found
             uniqueFileNameMatches++;
+            matchedGoogleMediaItems[googleMediaItem.id] = {
+              takeoutFilePath: takeoutFilePaths[0],
+              googleMediaItem
+            };
+          
           } else {
-            // look for date matches
-
-            // question posed on 3/6
-            // should the code only look for date matches in takeoutFilePaths? That is, the takeoutFiles that have the same fileName?
-            // perhaps it does that first, then makes another pass looking for all date matches??
-
-
-
-
+            // multiple file names match; look for a date match
+            const matchedTakeoutFile: string = getTakeoutFileWithMatchingNameAndDate(
+              googleMediaItem,
+              takeoutFilePaths,
+              takeoutFilesByCreateDate,
+              takeoutFilesByDateTimeOriginal,
+              takeoutFilesByModifyDate,
+            );
+            if (matchedTakeoutFile !== '') {
+              matchedGoogleMediaItems[googleMediaItem.id] = {
+                takeoutFilePath: matchedTakeoutFile,
+                googleMediaItem
+              };
+            }
             multipleFileNameMatches++;
-            let multipleDateMatchesFound = false;
-            let noModifyDateMatchesFound = false;
-            const creationTimeKey = Date.parse(googleMediaItem.mediaMetadata.creationTime as unknown as string).toString();
-
-
-            // const matchingCreateDateTakeoutFiles: string[] = getTakeoutFilesMatchingGoogleDate(takeoutFilesByCreateDate, creationTimeKey);
-            const matchingCreateDateTakeoutFiles: string[] = getTakeoutFilesMatchingGoogleDate(takeoutFilesByCreateDate, creationTimeKey, takeoutFilePaths);
-
-
-            if (matchingCreateDateTakeoutFiles.length !== 1) {
-              if (matchingCreateDateTakeoutFiles.length > 1) {
-                multipleDateMatchesFound = true;
-              }
-              const matchingDateTimeOriginalTakeoutFiles: string[] = getTakeoutFilesMatchingGoogleDate(takeoutFilesByDateTimeOriginal, creationTimeKey, takeoutFilePaths);
-              if (matchingDateTimeOriginalTakeoutFiles.length !== 1) {
-                if (matchingDateTimeOriginalTakeoutFiles.length > 1) {
-                  multipleDateMatchesFound = true;
-                }
-                const matchingModifyDateTakeoutFiles: string[] = getTakeoutFilesMatchingGoogleDate(takeoutFilesByModifyDate, creationTimeKey, takeoutFilePaths);
-                if (matchingModifyDateTakeoutFiles.length === 0) {
-                  noModifyDateMatchesFound = true;
-                } else if (matchingModifyDateTakeoutFiles.length > 1) {
-                  multipleDateMatchesFound = true;
-                }
-              }
-            }
-            if (multipleDateMatchesFound) {
-              multipleDateMatches++;
-              // const takeoutFilesWithSameNameAndDateAsGooglePhoto = getMultipleDateMatches(googleMediaItem,
-              //   takeoutFilesByCreateDate,
-              //   takeoutFilesByDateTimeOriginal,
-              //   takeoutFilesByModifyDate);
-              // const takeoutFilesWithSameDimensions = await getNonDateExifMatch(googleMediaItem, takeoutFilesWithSameNameAndDateAsGooglePhoto);
-              // if (takeoutFilesWithSameDimensions.length === 0) {
-              //   noTakeoutFilesWithSameDimensions++;
-              // } else if (takeoutFilesWithSameDimensions.length === 1) {
-              //   singleTakeoutFilesWithSameDimensions++;
-              //   console.log('singleTakeoutFilesWithSameDimensions = ', singleTakeoutFilesWithSameDimensions);
-              // } else if (takeoutFilesWithSameDimensions.length > 1) {
-              //   multipleTakeoutFilesWithSameDimensions++;
-              // }
-            } else if (noModifyDateMatchesFound) {
-              noDateMatches++;
-            } else {
-              singleDateMatches++;
-
-              // look for a match where the file name of the takeout file does not match the file name of the google media item
-              // const takeoutFileName = path.basename(matchingCreateDateTakeoutFiles[0]);
-              // const googleFileName = googleMediaItem.filename;
-              // if (takeoutFileName !== googleFileName) {
-              //   console.log('googleMediaItem');
-              //   console.log(googleMediaItem);
-              //   console.log('googleFileName = ', googleFileName);
-              //   console.log('takeoutFileName = ', takeoutFileName);
-              // }
-              // it is possible - it occurs in cases where google has mysteriously created a 'copy' of the same file with a different name.
-            }
           }
         } else {
           noFileNameMatch++;
+          unmatchedGoogleMediaItems.push(googleMediaItem);
         }
       }
     }
+  }
+
+  // see if there is a takeout file whose dates match any of the unmatched google media items
+  for (const unmatchedGoogleMediaItem of unmatchedGoogleMediaItems) {
+    const matchedTakeoutFile: string = getTakeoutFileWithMatchingNameAndDate(
+      unmatchedGoogleMediaItem,
+      [],
+      takeoutFilesByCreateDate,
+      takeoutFilesByDateTimeOriginal,
+      takeoutFilesByModifyDate,
+    );
   }
 
   console.log('');
   console.log('total number of googleMediaItems = ', Object.keys(googleMediaItemsById).length);
   console.log('unique matches found = ', uniqueFileNameMatches + singleDateMatches);
   console.log('number unaccounted for = ', Object.keys(googleMediaItemsById).length - (uniqueFileNameMatches + singleDateMatches));
+
+  console.log('matchedGoogleMediaItems count = ', Object.keys(matchedGoogleMediaItems).length);
+  console.log('unmatchedGoogleMediaItems count = ', unmatchedGoogleMediaItems.length);
+
 
   console.log('');
   console.log('uniqueFileNameMatches = ', uniqueFileNameMatches);
@@ -511,6 +496,39 @@ const matchGooglePhotosToTakeoutPhotos = async () => {
 
   debugger;
 }
+
+const getTakeoutFileWithMatchingNameAndDate = (
+  googleMediaItem: GoogleMediaItem,
+  takeoutFilePaths: string[],
+  takeoutFilesByCreateDate: any,
+  takeoutFilesByDateTimeOriginal: any,
+  takeoutFilesByModifyDate: any,
+): string => {
+
+  const creationTimeKey = Date.parse(googleMediaItem.mediaMetadata.creationTime as unknown as string).toString();
+
+  let matchingDateTakeoutFiles: string[] = getTakeoutFilesMatchingGoogleDate(takeoutFilesByCreateDate, creationTimeKey, takeoutFilePaths);
+
+  if (matchingDateTakeoutFiles.length !== 1) {
+    if (matchingDateTakeoutFiles.length === 0) {
+      matchingDateTakeoutFiles = getTakeoutFilesMatchingGoogleDate(takeoutFilesByDateTimeOriginal, creationTimeKey, takeoutFilePaths);
+      if (matchingDateTakeoutFiles.length !== 1) {
+        if (matchingDateTakeoutFiles.length === 0) {
+          matchingDateTakeoutFiles = getTakeoutFilesMatchingGoogleDate(takeoutFilesByModifyDate, creationTimeKey, takeoutFilePaths);
+        }
+      }
+    }
+  }
+
+  if (matchingDateTakeoutFiles.length === 1) {
+    return matchingDateTakeoutFiles[0];
+  }
+
+  return '';
+}
+
+
+
 
 const getNonDateExifMatch = async (
   googleMediaItem: GoogleMediaItem,
@@ -602,6 +620,9 @@ const getTakeoutFilesMatchingGoogleDate = (
   if (takeoutFilesByDate.hasOwnProperty(dt)) {
     const takeoutFilesWithSameNameAndDate: string[] = [];
     const takeoutFilesWithSameDate: string[] = takeoutFilesByDate[dt];
+    if (takeoutFilesWithSameDate.length > 0) {
+      debugger;
+    }
     for (const matchingTakeoutFile of takeoutFilesWithSameDate) {
       if (takeoutFilePaths.indexOf(matchingTakeoutFile) === 0) {
         takeoutFilesWithSameNameAndDate.push(matchingTakeoutFile);
