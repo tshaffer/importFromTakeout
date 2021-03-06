@@ -399,7 +399,7 @@ const matchGooglePhotosToTakeoutPhotos = async () => {
   const takeoutFilesByCreateDate: IdToStringArray = await getJsonFromFile('/Users/tedshaffer/Documents/Projects/importFromTakeout/testResults/takeoutFilesByCreateDate.json');
   const takeoutFilesByDateTimeOriginal: IdToStringArray = await getJsonFromFile('/Users/tedshaffer/Documents/Projects/importFromTakeout/testResults/takeoutFilesByDateTimeOriginal.json');
   const takeoutFilesByModifyDate: IdToStringArray = await getJsonFromFile('/Users/tedshaffer/Documents/Projects/importFromTakeout/testResults/takeoutFilesByModifyDate.json');
-  const takeoutFilesByImageDimensions: IdToStringArray = await getJsonFromFile('/Users/tedshaffer/Documents/Projects/importFromTakeout/testResults/takeoutFilesByImageDimensions.json');
+  // const takeoutFilesByImageDimensions: IdToStringArray = await getJsonFromFile('/Users/tedshaffer/Documents/Projects/importFromTakeout/testResults/takeoutFilesByImageDimensions.json');
 
   let uniqueFileNameMatches = 0;
   let singleDateMatches = 0;
@@ -414,6 +414,7 @@ const matchGooglePhotosToTakeoutPhotos = async () => {
 
   const matchedGoogleMediaItems: IdToMatchedGoogleMediaItem = {};
   const unmatchedGoogleMediaItems: GoogleMediaItem[] = [];
+  let duplicateGoogleIdsFound = 0;
 
   for (const key in googleMediaItemsById) {
     if (Object.prototype.hasOwnProperty.call(googleMediaItemsById, key)) {
@@ -421,31 +422,40 @@ const matchGooglePhotosToTakeoutPhotos = async () => {
       for (const googleMediaItem of googleMediaItems) {
 
         if (takeoutFilesByFileName.hasOwnProperty(googleMediaItem.filename)) {
-          
+
           const takeoutFilePaths: string[] = takeoutFilesByFileName[googleMediaItem.filename];
-          
+
           if (takeoutFilePaths.length === 1) {
             // unique file name match found
             uniqueFileNameMatches++;
+            if (matchedGoogleMediaItems.hasOwnProperty(googleMediaItem.id)) {
+              duplicateGoogleIdsFound++;
+            }
             matchedGoogleMediaItems[googleMediaItem.id] = {
               takeoutFilePath: takeoutFilePaths[0],
               googleMediaItem
             };
-          
+
           } else {
             // multiple file names match; look for a date match
-            const matchedTakeoutFile: string = getTakeoutFileWithMatchingNameAndDate(
+            const matchedTakeoutFiles: string[] = getTakeoutFileWithMatchingNameAndDate(
               googleMediaItem,
               takeoutFilePaths,
               takeoutFilesByCreateDate,
               takeoutFilesByDateTimeOriginal,
               takeoutFilesByModifyDate,
             );
-            if (matchedTakeoutFile !== '') {
+            if (matchedTakeoutFiles.length === 1) {
+              singleDateMatches++;
+              if (matchedGoogleMediaItems.hasOwnProperty(googleMediaItem.id)) {
+                duplicateGoogleIdsFound++;
+              }
               matchedGoogleMediaItems[googleMediaItem.id] = {
-                takeoutFilePath: matchedTakeoutFile,
+                takeoutFilePath: matchedTakeoutFiles[0],
                 googleMediaItem
               };
+            } else {
+              unmatchedGoogleMediaItems.push(googleMediaItem);
             }
             multipleFileNameMatches++;
           }
@@ -458,24 +468,40 @@ const matchGooglePhotosToTakeoutPhotos = async () => {
   }
 
   // see if there is a takeout file whose dates match any of the unmatched google media items
+  let noFileNameNoDateMatch = 0;
+  let noFileNameSingleDateMatch = 0;
+  let noFileNameMultipleDateMatches = 0;
+
+  let matchedTakeoutFiles: string[] = [];
   for (const unmatchedGoogleMediaItem of unmatchedGoogleMediaItems) {
-    const matchedTakeoutFile: string = getTakeoutFileWithMatchingNameAndDate(
+    matchedTakeoutFiles = getTakeoutFileWithMatchingNameAndDate(
       unmatchedGoogleMediaItem,
       [],
       takeoutFilesByCreateDate,
       takeoutFilesByDateTimeOriginal,
       takeoutFilesByModifyDate,
     );
+    if (matchedTakeoutFiles.length === 0) {
+      noFileNameNoDateMatch++;
+    } else if (matchedTakeoutFiles.length === 1) {
+      noFileNameSingleDateMatch++;
+    } else {
+      noFileNameMultipleDateMatches++;
+    }
   }
 
   console.log('');
   console.log('total number of googleMediaItems = ', Object.keys(googleMediaItemsById).length);
-  console.log('unique matches found = ', uniqueFileNameMatches + singleDateMatches);
-  console.log('number unaccounted for = ', Object.keys(googleMediaItemsById).length - (uniqueFileNameMatches + singleDateMatches));
+  console.log('unique matches found = ', uniqueFileNameMatches + singleDateMatches + noFileNameSingleDateMatch);
+  console.log('number unaccounted for = ', Object.keys(googleMediaItemsById).length - (uniqueFileNameMatches + singleDateMatches + noFileNameSingleDateMatch));
 
   console.log('matchedGoogleMediaItems count = ', Object.keys(matchedGoogleMediaItems).length);
   console.log('unmatchedGoogleMediaItems count = ', unmatchedGoogleMediaItems.length);
+  console.log('duplicateGoogleIdsFound count = ', duplicateGoogleIdsFound);
 
+  console.log('noFileNameNoDateMatch = ', noFileNameNoDateMatch);
+  console.log('noFileNameSingleDateMatch = ', noFileNameSingleDateMatch);
+  console.log('noFileNameMultipleDateMatches = ', noFileNameMultipleDateMatches);
 
   console.log('');
   console.log('uniqueFileNameMatches = ', uniqueFileNameMatches);
@@ -497,34 +523,66 @@ const matchGooglePhotosToTakeoutPhotos = async () => {
   debugger;
 }
 
+const addUniqueFiles = (existingFilePaths: string[], newFilePaths: string[]): string[] => {
+
+  const uniqueFilesMap: any = {};
+
+  for (const existingFilePath of existingFilePaths) {
+    if (!uniqueFilesMap.hasOwnProperty(existingFilePath)) {
+      uniqueFilesMap[existingFilePath] = true;
+    }
+  }
+  for (const newFilePath of newFilePaths) {
+    if (!uniqueFilesMap.hasOwnProperty(newFilePath)) {
+      uniqueFilesMap[newFilePath] = true;
+    }
+  }
+
+  const uniqueFilePaths: string[] = [];
+  for (const uniqueFilePath in uniqueFilesMap) {
+    if (Object.prototype.hasOwnProperty.call(uniqueFilesMap, uniqueFilePath)) {
+      uniqueFilePaths.push(uniqueFilePath);
+    }
+  }
+  return uniqueFilePaths;
+}
+
 const getTakeoutFileWithMatchingNameAndDate = (
   googleMediaItem: GoogleMediaItem,
   takeoutFilePaths: string[],
   takeoutFilesByCreateDate: any,
   takeoutFilesByDateTimeOriginal: any,
   takeoutFilesByModifyDate: any,
-): string => {
+): string[] => {
+
+  let allMatchingDateTakeoutFiles: string[] = [];
 
   const creationTimeKey = Date.parse(googleMediaItem.mediaMetadata.creationTime as unknown as string).toString();
 
   let matchingDateTakeoutFiles: string[] = getTakeoutFilesMatchingGoogleDate(takeoutFilesByCreateDate, creationTimeKey, takeoutFilePaths);
 
+  // TEDTODO - better way to make clone?
+  allMatchingDateTakeoutFiles = matchingDateTakeoutFiles.concat([]);
+
   if (matchingDateTakeoutFiles.length !== 1) {
     if (matchingDateTakeoutFiles.length === 0) {
       matchingDateTakeoutFiles = getTakeoutFilesMatchingGoogleDate(takeoutFilesByDateTimeOriginal, creationTimeKey, takeoutFilePaths);
+      allMatchingDateTakeoutFiles = addUniqueFiles(allMatchingDateTakeoutFiles, matchingDateTakeoutFiles);
       if (matchingDateTakeoutFiles.length !== 1) {
         if (matchingDateTakeoutFiles.length === 0) {
           matchingDateTakeoutFiles = getTakeoutFilesMatchingGoogleDate(takeoutFilesByModifyDate, creationTimeKey, takeoutFilePaths);
+          allMatchingDateTakeoutFiles = addUniqueFiles(allMatchingDateTakeoutFiles, matchingDateTakeoutFiles);
         }
       }
     }
   }
 
-  if (matchingDateTakeoutFiles.length === 1) {
-    return matchingDateTakeoutFiles[0];
-  }
+  return allMatchingDateTakeoutFiles;
+  // if (matchingDateTakeoutFiles.length === 1) {
+  //   return matchingDateTakeoutFiles[0];
+  // }
 
-  return '';
+  // return '';
 }
 
 
@@ -618,15 +676,18 @@ const getTakeoutFilesMatchingGoogleDate = (
   takeoutFilePaths: string[]): string[] => {
 
   if (takeoutFilesByDate.hasOwnProperty(dt)) {
-    const takeoutFilesWithSameNameAndDate: string[] = [];
+    let takeoutFilesWithSameNameAndDate: string[] = [];
     const takeoutFilesWithSameDate: string[] = takeoutFilesByDate[dt];
-    if (takeoutFilesWithSameDate.length > 0) {
-      debugger;
-    }
-    for (const matchingTakeoutFile of takeoutFilesWithSameDate) {
-      if (takeoutFilePaths.indexOf(matchingTakeoutFile) === 0) {
-        takeoutFilesWithSameNameAndDate.push(matchingTakeoutFile);
+    if (takeoutFilePaths.length > 0) {
+      for (const matchingTakeoutFile of takeoutFilesWithSameDate) {
+        if (takeoutFilePaths.indexOf(matchingTakeoutFile) === 0) {
+          takeoutFilesWithSameNameAndDate.push(matchingTakeoutFile);
+        }
       }
+    } else {
+      takeoutFilesWithSameNameAndDate = takeoutFilesWithSameDate.map((takeoutFileWithSameDate: string) => {
+        return takeoutFileWithSameDate;
+      })
     }
     return takeoutFilesWithSameNameAndDate;
   }
