@@ -490,7 +490,8 @@ const matchGooglePhotosToTakeoutPhotos = async () => {
   console.log('');
   console.log('total number of googleMediaItems = ', Object.keys(googleMediaItemsById).length);
   console.log('unique matches found = ', uniqueFileNameMatches + singleDateMatches);
-  
+  console.log('number unaccounted for = ', Object.keys(googleMediaItemsById).length - (uniqueFileNameMatches + singleDateMatches));
+
   console.log('');
   console.log('uniqueFileNameMatches = ', uniqueFileNameMatches);
   console.log('');
