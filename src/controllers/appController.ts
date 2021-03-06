@@ -1,3 +1,6 @@
+import fs from 'fs';
+import path from 'path';
+
 import { closeStream, getFileName, getFilePath, getImageFilePaths, openReadStream, openWriteStream, readStream, writeJsonToFile, writeToWriteStream } from './fsUtils';
 import {
   // exifToDbItem, 
@@ -41,6 +44,28 @@ import { exifPropertyCount } from './exifUtils';
 import { findMe, findGPhotosByName, findGPhotosByNameStartsWith } from './dbInterface';
 import { isNil, isNumber, isObject, isString } from 'lodash';
 import { AuthService } from '../auth';
+import { FSWatcher } from 'fs-extra';
+
+// maps photo id to list of file paths that matched it
+interface MatchedPhoto {
+  imageFilePath: string;
+  exactMatch: boolean;
+}
+type IdToGoogleMediaItems = {
+  [key: string]: GoogleMediaItem[]
+}
+type IdToMatchedPhotoArray = {
+  [key: string]: MatchedPhoto[]
+}
+type IdToObject = {
+  [key: string]: any
+}
+type IdToAnyArray = {
+  [key: string]: any[]
+}
+type IdToStringArray = {
+  [key: string]: string[]
+}
 
 export const runApp = (authService: AuthService) => {
 
@@ -156,23 +181,6 @@ let dateTimeMatchResultsType: DateTimeMatchResultsType = {
 const filePathsNoNameMatchesFound: string[] = [];
 const filePathsNoDateMatchesFound: string[] = [];
 
-// maps photo id to list of file paths that matched it
-interface MatchedPhoto {
-  imageFilePath: string;
-  exactMatch: boolean;
-}
-type IdToGoogleMediaItems = {
-  [key: string]: GoogleMediaItem[]
-}
-type IdToStringArray = {
-  [key: string]: MatchedPhoto[]
-}
-type IdToObject = {
-  [key: string]: any
-}
-type IdToAnyArray = {
-  [key: string]: any[]
-}
 
 const googlePhotoIdsToMatchedPhotos: IdToAnyArray = {};
 
@@ -213,9 +221,15 @@ const getGooglePhotosWithUniqueCreationDates = async () => {
   const googleMediaItemsByUniqueCreationDate: any = {};
   const googleMediaItemsByDuplicateCreationDate: any = {};
 
-  const googleMediaItemsStream: any = openReadStream('/Users/tedshaffer/Documents/Projects/importFromTakeout/testResults/googleMediaItemsById.json');
-  const googleMediaItemsStr: string = await readStream(googleMediaItemsStream);
+  const googleMediaItemsReadStream: any = openReadStream('/Users/tedshaffer/Documents/Projects/importFromTakeout/testResults/googleMediaItemsById.json');
+  const googleMediaItemsStr: string = await readStream(googleMediaItemsReadStream);
   const googleMediaItemsById: IdToGoogleMediaItems = JSON.parse(googleMediaItemsStr);
+
+  // await writeJsonToFile('/Users/tedshaffer/Documents/Projects/importFromTakeout/testResults/output.json', googleMediaItemsById);
+  debugger;
+
+  console.log('googleMediaItemsById: number of items');
+  console.log(Object.keys(googleMediaItemsById).length);
 
   const beginningOfTime: Date = new Date('1969-01-15T16:00:00Z');
   const beginningOfTimeStr = '1969-01-15T16:00:00Z';
@@ -260,11 +274,11 @@ const getGooglePhotosWithUniqueCreationDates = async () => {
   console.log('noCreationTime Photo Count');
   console.log(noCreationTimePhotoCount);
 
-  const success: boolean = await writeJsonToFile(
-    '/Users/tedshaffer/Documents/Projects/importFromTakeout/testResults/googleMediaItemsByDuplicateCreationDate.json',
-    googleMediaItemsByDuplicateCreationDate
-  );
-  console.log(success);
+  // const success: boolean = await writeJsonToFile(
+  //   '/Users/tedshaffer/Documents/Projects/importFromTakeout/testResults/googleMediaItemsByDuplicateCreationDate.json',
+  //   googleMediaItemsByDuplicateCreationDate
+  // );
+  // console.log(success);
 
   console.log('number of duplicate creation dates');
   console.log(Object.keys(googleMediaItemsByDuplicateCreationDate));
@@ -275,7 +289,336 @@ const getGooglePhotosWithUniqueCreationDates = async () => {
   debugger;
 }
 
+const getTakeoutFilesByName = async () => {
+
+  const takeoutFilesByFileName: IdToStringArray = {};
+  const takeoutFilesByCreateDate: IdToStringArray = {};
+  const takeoutFilesByDateTimeOriginal: IdToStringArray = {};
+  const takeoutFilesByModifyDate: IdToStringArray = {};
+  const takeoutFilesByImageDimensions: IdToStringArray = {};
+
+  const filePaths: string[] = getImageFilePaths(mediaItemsDir);
+
+  let fileCount = 0;
+
+  for (let filePath of filePaths) {
+
+    const exifData: Tags = await getExifData(filePath);
+
+    addTakeoutFileByFileName(takeoutFilesByFileName, filePath, exifData.FileName);
+    addTakeoutFileByDate(takeoutFilesByCreateDate, filePath, exifData.CreateDate);
+    addTakeoutFileByDate(takeoutFilesByDateTimeOriginal, filePath, exifData.DateTimeOriginal);
+    addTakeoutFileByDate(takeoutFilesByModifyDate, filePath, exifData.ModifyDate);
+    addTakeoutFileByImageDimensions(takeoutFilesByImageDimensions, filePath, exifData.ImageWidth, exifData.ImageHeight);
+
+    /* 
+      also could consider
+        camera / photo specific exif data
+
+      available in accompanying json file
+        creationTime
+        modificationTime
+        photoTakenTime
+
+    */
+    fileCount++;
+
+    if ((fileCount % 100) === 0) {
+      console.log('fileCount = ', fileCount);
+    }
+
+  }
+
+  console.log('key count for takeoutFilesByFileName: ', Object.keys(takeoutFilesByFileName).length);
+  console.log('key count for takeoutFilesByCreateDate: ', Object.keys(takeoutFilesByCreateDate).length);
+  console.log('key count for takeoutFilesByDateTimeOriginal: ', Object.keys(takeoutFilesByDateTimeOriginal).length);
+  console.log('key count for takeoutFilesByModifyDate: ', Object.keys(takeoutFilesByModifyDate).length);
+  console.log('key count for takeoutFilesByImageDimensions: ', Object.keys(takeoutFilesByImageDimensions).length);
+
+  // await writeJsonToFile('/Users/tedshaffer/Documents/Projects/importFromTakeout/testResults/takeoutFilesByFileName.json', takeoutFilesByFileName);
+  // await writeJsonToFile('/Users/tedshaffer/Documents/Projects/importFromTakeout/testResults/takeoutFilesByCreateDate.json', takeoutFilesByCreateDate);
+  // await writeJsonToFile('/Users/tedshaffer/Documents/Projects/importFromTakeout/testResults/takeoutFilesByDateTimeOriginal.json', takeoutFilesByDateTimeOriginal);
+  // await writeJsonToFile('/Users/tedshaffer/Documents/Projects/importFromTakeout/testResults/takeoutFilesByModifyDate.json', takeoutFilesByModifyDate);
+  // await writeJsonToFile('/Users/tedshaffer/Documents/Projects/importFromTakeout/testResults/takeoutFilesByImageDimensions.json', takeoutFilesByImageDimensions);
+
+  debugger;
+}
+
+const addTakeoutFileByFileName = (takeoutFilesByFileName: IdToStringArray, filePath: string, fileName: string) => {
+  if (isString(fileName)) {
+    if (!takeoutFilesByFileName.hasOwnProperty(fileName)) {
+      takeoutFilesByFileName[fileName] = [];
+    }
+    takeoutFilesByFileName[fileName].push(filePath);
+  } else {
+    debugger;
+  }
+}
+
+const addTakeoutFileByDate = (takeoutFilesByDate: IdToStringArray, filePath: string, dt: any) => {
+  const ts: number = getDateTimeSinceZero(dt);
+  if (ts > 0) {
+    const tsKey = ts.toString();
+    if (!takeoutFilesByDate.hasOwnProperty(tsKey)) {
+      takeoutFilesByDate[tsKey] = [];
+    }
+    takeoutFilesByDate[tsKey].push(filePath);
+  }
+}
+
+const addTakeoutFileByImageDimensions = (takeoutFilesByDimensions: IdToStringArray, filePath: string, imageWidth: number, imageHeight: number) => {
+  if (isNumber(imageWidth) && isNumber(imageHeight)) {
+    const key: string = imageWidth.toString() + '-' + imageHeight.toString();
+    if (!takeoutFilesByDimensions.hasOwnProperty(key)) {
+      takeoutFilesByDimensions[key] = [];
+    }
+    takeoutFilesByDimensions[key].push(filePath);
+  }
+}
+
+const getJsonFromFile = async (filePath: string): Promise<any> => {
+  const readFileStream: fs.ReadStream = openReadStream(filePath);
+  const fileContents: string = await readStream(readFileStream);
+  const jsonObject: IdToMatchedPhotoArray = JSON.parse(fileContents);
+  return jsonObject;
+}
+
+const matchGooglePhotosToTakeoutPhotos = async () => {
+
+  const googleMediaItemsById: IdToGoogleMediaItems = await getJsonFromFile('/Users/tedshaffer/Documents/Projects/importFromTakeout/testResults/googleMediaItemsById.json');
+  const takeoutFilesByFileName: IdToStringArray = await getJsonFromFile('/Users/tedshaffer/Documents/Projects/importFromTakeout/testResults/takeoutFilesByFileName.json');
+  const takeoutFilesByCreateDate: IdToStringArray = await getJsonFromFile('/Users/tedshaffer/Documents/Projects/importFromTakeout/testResults/takeoutFilesByCreateDate.json');
+  const takeoutFilesByDateTimeOriginal: IdToStringArray = await getJsonFromFile('/Users/tedshaffer/Documents/Projects/importFromTakeout/testResults/takeoutFilesByDateTimeOriginal.json');
+  const takeoutFilesByModifyDate: IdToStringArray = await getJsonFromFile('/Users/tedshaffer/Documents/Projects/importFromTakeout/testResults/takeoutFilesByModifyDate.json');
+  const takeoutFilesByImageDimensions: IdToStringArray = await getJsonFromFile('/Users/tedshaffer/Documents/Projects/importFromTakeout/testResults/takeoutFilesByImageDimensions.json');
+
+  let uniqueFileNameMatches = 0;
+  let singleDateMatches = 0;
+  let multipleDateMatches = 0;
+  let noDateMatches = 0;
+  let multipleFileNameMatches = 0;
+  let noFileNameMatch = 0;
+
+  let noTakeoutFilesWithSameDimensions = 0;
+  let singleTakeoutFilesWithSameDimensions = 0;
+  let multipleTakeoutFilesWithSameDimensions = 0;
+
+  for (const key in googleMediaItemsById) {
+    if (Object.prototype.hasOwnProperty.call(googleMediaItemsById, key)) {
+      const googleMediaItems: GoogleMediaItem[] = googleMediaItemsById[key];
+      for (const googleMediaItem of googleMediaItems) {
+        if (takeoutFilesByFileName.hasOwnProperty(googleMediaItem.filename)) {
+          const takeoutFilePaths: string[] = takeoutFilesByFileName[googleMediaItem.filename];
+          if (takeoutFilePaths.length === 1) {
+            uniqueFileNameMatches++;
+          } else {
+            // look for date matches
+
+            // question posed on 3/6
+            // should the code only look for date matches in takeoutFilePaths? That is, the takeoutFiles that have the same fileName?
+            // perhaps it does that first, then makes another pass looking for all date matches??
+
+
+
+
+            multipleFileNameMatches++;
+            let multipleDateMatchesFound = false;
+            let noModifyDateMatchesFound = false;
+            const creationTimeKey = Date.parse(googleMediaItem.mediaMetadata.creationTime as unknown as string).toString();
+
+
+            // const matchingCreateDateTakeoutFiles: string[] = getTakeoutFilesMatchingGoogleDate(takeoutFilesByCreateDate, creationTimeKey);
+            const matchingCreateDateTakeoutFiles: string[] = getTakeoutFilesMatchingGoogleDate(takeoutFilesByCreateDate, creationTimeKey, takeoutFilePaths);
+
+
+            if (matchingCreateDateTakeoutFiles.length !== 1) {
+              if (matchingCreateDateTakeoutFiles.length > 1) {
+                multipleDateMatchesFound = true;
+              }
+              const matchingDateTimeOriginalTakeoutFiles: string[] = getTakeoutFilesMatchingGoogleDate(takeoutFilesByDateTimeOriginal, creationTimeKey, takeoutFilePaths);
+              if (matchingDateTimeOriginalTakeoutFiles.length !== 1) {
+                if (matchingDateTimeOriginalTakeoutFiles.length > 1) {
+                  multipleDateMatchesFound = true;
+                }
+                const matchingModifyDateTakeoutFiles: string[] = getTakeoutFilesMatchingGoogleDate(takeoutFilesByModifyDate, creationTimeKey, takeoutFilePaths);
+                if (matchingModifyDateTakeoutFiles.length === 0) {
+                  noModifyDateMatchesFound = true;
+                } else if (matchingModifyDateTakeoutFiles.length > 1) {
+                  multipleDateMatchesFound = true;
+                }
+              }
+            }
+            if (multipleDateMatchesFound) {
+              multipleDateMatches++;
+              // const takeoutFilesWithSameNameAndDateAsGooglePhoto = getMultipleDateMatches(googleMediaItem,
+              //   takeoutFilesByCreateDate,
+              //   takeoutFilesByDateTimeOriginal,
+              //   takeoutFilesByModifyDate);
+              // const takeoutFilesWithSameDimensions = await getNonDateExifMatch(googleMediaItem, takeoutFilesWithSameNameAndDateAsGooglePhoto);
+              // if (takeoutFilesWithSameDimensions.length === 0) {
+              //   noTakeoutFilesWithSameDimensions++;
+              // } else if (takeoutFilesWithSameDimensions.length === 1) {
+              //   singleTakeoutFilesWithSameDimensions++;
+              //   console.log('singleTakeoutFilesWithSameDimensions = ', singleTakeoutFilesWithSameDimensions);
+              // } else if (takeoutFilesWithSameDimensions.length > 1) {
+              //   multipleTakeoutFilesWithSameDimensions++;
+              // }
+            } else if (noModifyDateMatchesFound) {
+              noDateMatches++;
+            } else {
+              singleDateMatches++;
+
+              // look for a match where the file name of the takeout file does not match the file name of the google media item
+              // const takeoutFileName = path.basename(matchingCreateDateTakeoutFiles[0]);
+              // const googleFileName = googleMediaItem.filename;
+              // if (takeoutFileName !== googleFileName) {
+              //   console.log('googleMediaItem');
+              //   console.log(googleMediaItem);
+              //   console.log('googleFileName = ', googleFileName);
+              //   console.log('takeoutFileName = ', takeoutFileName);
+              // }
+              // it is possible - it occurs in cases where google has mysteriously created a 'copy' of the same file with a different name.
+            }
+          }
+        } else {
+          noFileNameMatch++;
+        }
+      }
+    }
+  }
+
+  console.log('');
+  console.log('total number of googleMediaItems = ', Object.keys(googleMediaItemsById).length);
+  console.log('unique matches found = ', uniqueFileNameMatches + singleDateMatches);
+  
+  console.log('');
+  console.log('uniqueFileNameMatches = ', uniqueFileNameMatches);
+  console.log('');
+
+  console.log('multipleFileNameMatches = ', multipleFileNameMatches);
+  console.log('singleDateMatches = ', singleDateMatches);
+  console.log('multipleDateMatches = ', multipleDateMatches);
+  console.log('noDateMatches = ', noDateMatches);
+
+  console.log('');
+  console.log('noFileNameMatches = ', noFileNameMatch);
+
+  console.log('');
+  console.log('noTakeoutFilesWithSameDimensions = ', noTakeoutFilesWithSameDimensions);
+  console.log('singleTakeoutFilesWithSameDimensions = ', singleTakeoutFilesWithSameDimensions);
+  console.log('multipleTakeoutFilesWithSameDimensions = ', multipleTakeoutFilesWithSameDimensions);
+
+  debugger;
+}
+
+const getNonDateExifMatch = async (
+  googleMediaItem: GoogleMediaItem,
+  takeoutFilePaths: string[],
+): Promise<string[]> => {
+
+  // iterate through the takeout files that have the same name, same date 
+
+  const takeoutFilesWithSameDimensions: string[] = [];
+
+  for (const takeoutFilePath of takeoutFilePaths) {
+    const exifData: Tags = await getExifData(takeoutFilePath);
+    // console.log('Tags for takeoutFilePath: ', takeoutFilePath);
+    // console.log(exifData);
+    if (isObject(googleMediaItem.mediaMetadata)) {
+      if (isString(googleMediaItem.mediaMetadata.width)) {
+        const gWidth = Number(googleMediaItem.mediaMetadata.width);
+        if (!isNaN(gWidth)) {
+          if (isString(googleMediaItem.mediaMetadata.height)) {
+            const gHeight = Number(googleMediaItem.mediaMetadata.height);
+            if (!isNaN(gHeight)) {
+              if (isNumber(exifData.ImageWidth) && exifData.ImageWidth === gWidth && isNumber(exifData.ImageHeight) && exifData.ImageHeight === gHeight) {
+                takeoutFilesWithSameDimensions.push(takeoutFilePath);
+              } else if (isNumber(exifData.ExifImageWidth) && exifData.ExifImageWidth === gWidth && isNumber(exifData.ExifImageHeight) && exifData.ExifImageHeight === gHeight) {
+                takeoutFilesWithSameDimensions.push(takeoutFilePath);
+              }
+              // check for portrait mode where width and height are swapped
+              else if (isNumber(exifData.ImageWidth) && exifData.ImageWidth === gHeight && isNumber(exifData.ImageHeight) && exifData.ImageHeight === gWidth) {
+                takeoutFilesWithSameDimensions.push(takeoutFilePath);
+              } else if (isNumber(exifData.ExifImageWidth) && exifData.ExifImageWidth === gHeight && isNumber(exifData.ExifImageHeight) && exifData.ExifImageHeight === gWidth) {
+                takeoutFilesWithSameDimensions.push(takeoutFilePath);
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+
+  if (takeoutFilesWithSameDimensions.length <= 1) {
+    console.log('gMediaItem: ', googleMediaItem.filename);
+    console.log('takeoutFiles');
+    console.log('takeoutFilesWithSameDimensions');
+    console.log(takeoutFilesWithSameDimensions);
+
+  }
+  return takeoutFilesWithSameDimensions;
+
+}
+
+const getMultipleDateMatches = (
+  googleMediaItem: GoogleMediaItem,
+  takeoutFilesByCreateDate: IdToStringArray,
+  takeoutFilesByDateTimeOriginal: IdToStringArray,
+  takeoutFilesByModifyDate: IdToStringArray,
+): string[] => {
+
+  const uniqueFilePaths: any = {};
+
+  const creationTimeKey = Date.parse(googleMediaItem.mediaMetadata.creationTime as unknown as string).toString();
+  let matchingTakeoutFiles: string[] = getTakeoutFilesMatchingGoogleDate(takeoutFilesByCreateDate, creationTimeKey, []);
+  matchingTakeoutFiles = matchingTakeoutFiles.concat(getTakeoutFilesMatchingGoogleDate(takeoutFilesByDateTimeOriginal, creationTimeKey, []));
+  matchingTakeoutFiles = matchingTakeoutFiles.concat(getTakeoutFilesMatchingGoogleDate(takeoutFilesByModifyDate, creationTimeKey, []));
+  for (const matchingTakeoutFile of matchingTakeoutFiles) {
+    if (!uniqueFilePaths.hasOwnProperty(matchingTakeoutFile)) {
+      uniqueFilePaths[matchingTakeoutFile] = true;
+    }
+  }
+
+  return Object.keys(uniqueFilePaths);
+
+  // iterate through the takeout files that have the same name, same date 
+  // console.log('Google media item');
+  // console.log(googleMediaItem);
+  // for (const uniqueFilePath in uniqueFilePaths) {
+  //   if (Object.prototype.hasOwnProperty.call(uniqueFilePaths, uniqueFilePath)) {
+  //     const exifData: Tags = await getExifData(uniqueFilePath);
+  //     console.log('Tags for uniqueFilePath: ', uniqueFilePath);
+  //     console.log(exifData);
+  //   }
+  // }
+}
+
+const getTakeoutFilesMatchingGoogleDate = (
+  takeoutFilesByDate: IdToStringArray,
+  dt: string,
+  takeoutFilePaths: string[]): string[] => {
+
+  if (takeoutFilesByDate.hasOwnProperty(dt)) {
+    const takeoutFilesWithSameNameAndDate: string[] = [];
+    const takeoutFilesWithSameDate: string[] = takeoutFilesByDate[dt];
+    for (const matchingTakeoutFile of takeoutFilesWithSameDate) {
+      if (takeoutFilePaths.indexOf(matchingTakeoutFile) === 0) {
+        takeoutFilesWithSameNameAndDate.push(matchingTakeoutFile);
+      }
+    }
+    return takeoutFilesWithSameNameAndDate;
+  }
+
+  return [];
+}
+
 const runMatchExperiments = async (authService: AuthService) => {
+
+  await matchGooglePhotosToTakeoutPhotos();
+  debugger;
+
+  await getTakeoutFilesByName();
+  debugger;
 
   await getGooglePhotosWithUniqueCreationDates();
 
@@ -283,14 +626,14 @@ const runMatchExperiments = async (authService: AuthService) => {
 
   await getGooglePhotoInfo(authService);
 
-  const filePathsNoNameMatchesFoundStream: any = openWriteStream('/Volumes/SHAFFEROTO/takeout/unzipped/noFileNameMatches.txt');
-  const filePathsNoDateMatchesFoundStream: any = openWriteStream('/Volumes/SHAFFEROTO/takeout/unzipped/noDateTimeMatches.txt');
+  // const filePathsNoNameMatchesFoundStream: any = openWriteStream('/Volumes/SHAFFEROTO/takeout/unzipped/noFileNameMatches.txt');
+  // const filePathsNoDateMatchesFoundStream: any = openWriteStream('/Volumes/SHAFFEROTO/takeout/unzipped/noDateTimeMatches.txt');
   // const googlePhotoIdsToMatchedPhotosStream: any = openWriteStream('/Volumes/SHAFFEROTO/takeout/unzipped/googlePhotoIdsToMatchedPhotos.json');
 
 
   const googlePhotoIdsToMatchedPhotosStream: any = openReadStream('/Volumes/SHAFFEROTO/takeout/unzipped/googlePhotoIdsToMatchedPhotos.json');
   const googlePhotoIdsToMatchedPhotosStr: string = await readStream(googlePhotoIdsToMatchedPhotosStream);
-  const googlePhotoIdsToMatchedPhotos: IdToStringArray = JSON.parse(googlePhotoIdsToMatchedPhotosStr);
+  const googlePhotoIdsToMatchedPhotos: IdToMatchedPhotoArray = JSON.parse(googlePhotoIdsToMatchedPhotosStr);
 
   let fileCount = 0;
 
@@ -335,7 +678,7 @@ const runMatchExperiments = async (authService: AuthService) => {
       } else if (photos.length === 0) {
         matchResultsType.noNameMatchesFound++;
         filePathsNoNameMatchesFound.push(imageFilePath);
-        writeToWriteStream(filePathsNoNameMatchesFoundStream, imageFilePath);
+        // writeToWriteStream(filePathsNoNameMatchesFoundStream, imageFilePath);
       } else {
         const matchedId: string = await getMatchedDateTimePhotoWithSameName(imageFilePath, photos);
         if (matchedId !== '') {
@@ -388,11 +731,11 @@ const runMatchExperiments = async (authService: AuthService) => {
   debugger;
 
   const googlePhotoIdsToMatchedPhotosAsStr = JSON.stringify(googlePhotoIdsToMatchedPhotos);
-  writeToWriteStream(googlePhotoIdsToMatchedPhotosStream, googlePhotoIdsToMatchedPhotosAsStr);
+  // writeToWriteStream(googlePhotoIdsToMatchedPhotosStream, googlePhotoIdsToMatchedPhotosAsStr);
   closeStream(googlePhotoIdsToMatchedPhotosStream);
 
-  closeStream(filePathsNoNameMatchesFoundStream);
-  closeStream(filePathsNoDateMatchesFoundStream);
+  // closeStream(filePathsNoNameMatchesFoundStream);
+  // closeStream(filePathsNoDateMatchesFoundStream);
 
   console.log(matchResultsType);
   console.log(dateTimeMatchResultsType);
@@ -626,13 +969,19 @@ const getDateTimeMatchResultsType = async (gPhotoCreationTimeSpec: string, fileP
 
 const getDateTimeSinceZero = (dt: any): number => {
   let ts = -1;
-  if (!isNil(dt)) {
-    if (isString(dt)) {
-      ts = Date.parse(dt);
-    } else {
-      ts = Date.parse((dt as ExifDateTime).toISOString());
+  try {
+    if (!isNil(dt)) {
+      if (isString(dt)) {
+        ts = Date.parse(dt);
+      } else {
+        ts = Date.parse((dt as ExifDateTime).toISOString());
+      }
     }
+  } catch (error) {
+    console.log('getDateTimeSinceZero error: ', error);
+    console.log('dt: ', dt);
   }
+
   return ts;
 }
 

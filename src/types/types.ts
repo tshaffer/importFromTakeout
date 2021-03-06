@@ -60,7 +60,7 @@ export interface GoogleMediaItem {
 }
 
 export interface GoogleMediaMetadata {
-  creationTime: Date;
+  creationTime: Date; // or string?
   height: string;
   width: string;
   photo: GooglePhoto;
