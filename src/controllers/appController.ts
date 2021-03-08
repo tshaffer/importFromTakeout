@@ -3,6 +3,7 @@ import path from 'path';
 
 import { closeStream, getFileName, getFilePath, getImageFilePaths, openReadStream, openWriteStream, readStream, writeJsonToFile, writeToWriteStream } from './fsUtils';
 import {
+  exifMatch,
   // exifToDbItem, 
   getExifData,
   // trackExifPropertyCounts,
@@ -25,7 +26,7 @@ import {
 
 import {
   DateTimeMatchResultsType,
-  DbMediaItem, GoogleMediaItem, GPhotosMediaItem, MatchResultsType,
+  DbMediaItem, GoogleMediaItem, GoogleMediaMetadata, GooglePhoto, GPhotosMediaItem, MatchResultsType,
   MatchResultType,
 } from '../types';
 
@@ -392,6 +393,102 @@ const getJsonFromFile = async (filePath: string): Promise<any> => {
   return jsonObject;
 }
 
+let tagsMatchMissingGoogleMediaMetadata = 0;
+let tagsMatchMissingExifDimensionData = 0;
+let tagsMatchDimensionsMismatch = 0;
+let tagsMatchMimeTypeMismatch = 0;
+let tagsMatchApertureMismatch = 0;
+let tagsMatchCameraMakeMismatch = 0;
+let tagsMatchCameraModelMismatch = 0;
+let tagsMatchIsoMismatch = 0;
+
+const roundToNearestTenth = (valIn: number): number => {
+  return Math.round(valIn * 10) / 10;
+}
+
+const matchTags = (googleMediaItem: GoogleMediaItem, exifData: Tags): boolean => {
+
+  if (isString(googleMediaItem.mimeType) && googleMediaItem.mimeType !== '') {
+    if (isString(exifData.MIMEType)) {
+      if (exifData.MIMEType.toLowerCase() !== googleMediaItem.mimeType.toLowerCase()) {
+        tagsMatchMimeTypeMismatch++;
+        return false;
+      }
+    }
+  }
+  if (isObject(googleMediaItem.mediaMetadata)) {
+
+    const mediaMetadata: GoogleMediaMetadata = googleMediaItem.mediaMetadata;
+    
+    if (isString(mediaMetadata.width) && isString(mediaMetadata.height)) {
+      if (isNumber(exifData.ImageWidth) && isNumber(exifData.ImageHeight)) {
+        if (Number(mediaMetadata.width) !== exifData.ImageWidth || Number(mediaMetadata.width) !== exifData.ImageWidth) {
+          tagsMatchDimensionsMismatch++;
+          return false;
+        }
+      } else {
+        tagsMatchMissingExifDimensionData++;
+      }
+    }
+
+    if (isObject(mediaMetadata.photo)) {
+
+      const photoMetadata: GooglePhoto = mediaMetadata.photo;
+
+      if (isNumber(photoMetadata.apertureFNumber)) {
+        if (isNumber(exifData.Aperture) && roundToNearestTenth(exifData.Aperture) !== roundToNearestTenth(photoMetadata.apertureFNumber)) {
+          tagsMatchApertureMismatch++;
+          return false;
+        }
+      }
+
+      if (isString(photoMetadata.cameraMake)) {
+        if (isString(exifData.Make) && exifData.Make !== photoMetadata.cameraMake) {
+          tagsMatchCameraMakeMismatch++;
+          return false;
+        }
+      }
+
+      if (isString(photoMetadata.cameraModel)) {
+        if (isString(exifData.Model) && exifData.Model !== photoMetadata.cameraModel) {
+          tagsMatchCameraModelMismatch++;
+          return false;
+        }        
+      }
+
+      // if (isNumber(photoMetadata.focalLength)) {
+      //   // exifData rounds it off
+      // }
+
+      if (isNumber(photoMetadata.isoEquivalent)) {
+        if (isNumber(exifData.ISO) && exifData.ISO !== photoMetadata.isoEquivalent) {
+          tagsMatchIsoMismatch++;
+          return false;
+        }        
+      }
+    }
+
+  } else {
+    tagsMatchMissingGoogleMediaMetadata++;
+    return false;
+  }
+
+  return true;
+}
+
+const getTagsMatch = async (googleMediaItem: GoogleMediaItem, takeoutFiles: string[]): Promise<string> => {
+
+  for (const takeoutFile of takeoutFiles) {
+    const exifData: Tags = await getExifData(takeoutFile);
+    if (matchTags(googleMediaItem, exifData)) {
+      return takeoutFile;
+    }
+  }
+
+  return '';
+}
+
+
 const matchGooglePhotosToTakeoutPhotos = async () => {
 
   const googleMediaItemsById: IdToGoogleMediaItems = await getJsonFromFile('/Users/tedshaffer/Documents/Projects/importFromTakeout/testResults/googleMediaItemsById.json');
@@ -399,18 +496,19 @@ const matchGooglePhotosToTakeoutPhotos = async () => {
   const takeoutFilesByCreateDate: IdToStringArray = await getJsonFromFile('/Users/tedshaffer/Documents/Projects/importFromTakeout/testResults/takeoutFilesByCreateDate.json');
   const takeoutFilesByDateTimeOriginal: IdToStringArray = await getJsonFromFile('/Users/tedshaffer/Documents/Projects/importFromTakeout/testResults/takeoutFilesByDateTimeOriginal.json');
   const takeoutFilesByModifyDate: IdToStringArray = await getJsonFromFile('/Users/tedshaffer/Documents/Projects/importFromTakeout/testResults/takeoutFilesByModifyDate.json');
-  // const takeoutFilesByImageDimensions: IdToStringArray = await getJsonFromFile('/Users/tedshaffer/Documents/Projects/importFromTakeout/testResults/takeoutFilesByImageDimensions.json');
 
   let uniqueFileNameMatches = 0;
   let singleDateMatches = 0;
   let multipleDateMatches = 0;
-  let noDateMatches = 0;
   let multipleFileNameMatches = 0;
   let noFileNameMatch = 0;
 
   let noTakeoutFilesWithSameDimensions = 0;
   let singleTakeoutFilesWithSameDimensions = 0;
   let multipleTakeoutFilesWithSameDimensions = 0;
+
+  let multipleNameMatchesNoDateMatches = 0;
+  let multipleNameMatchesMultipleDateMatches = 0;
 
   const matchedGoogleMediaItems: IdToMatchedGoogleMediaItem = {};
   const unmatchedGoogleMediaItems: GoogleMediaItem[] = [];
@@ -426,17 +524,21 @@ const matchGooglePhotosToTakeoutPhotos = async () => {
           const takeoutFilePaths: string[] = takeoutFilesByFileName[googleMediaItem.filename];
 
           if (takeoutFilePaths.length === 1) {
+
             // unique file name match found
             uniqueFileNameMatches++;
             if (matchedGoogleMediaItems.hasOwnProperty(googleMediaItem.id)) {
               duplicateGoogleIdsFound++;
             }
+
+            // track unique matches
             matchedGoogleMediaItems[googleMediaItem.id] = {
               takeoutFilePath: takeoutFilePaths[0],
               googleMediaItem
             };
 
           } else {
+
             // multiple file names match; look for a date match
             const matchedTakeoutFiles: string[] = getTakeoutFileWithMatchingNameAndDate(
               googleMediaItem,
@@ -456,6 +558,11 @@ const matchGooglePhotosToTakeoutPhotos = async () => {
               };
             } else {
               unmatchedGoogleMediaItems.push(googleMediaItem);
+              if (matchedTakeoutFiles.length === 0) {
+                multipleNameMatchesNoDateMatches++;
+              } else {
+                multipleNameMatchesMultipleDateMatches++;
+              }
             }
             multipleFileNameMatches++;
           }
@@ -468,9 +575,18 @@ const matchGooglePhotosToTakeoutPhotos = async () => {
   }
 
   // see if there is a takeout file whose dates match any of the unmatched google media items
-  let noFileNameNoDateMatch = 0;
-  let noFileNameSingleDateMatch = 0;
-  let noFileNameMultipleDateMatches = 0;
+  let unmatchedItemNoDateMatch = 0;
+  let unmatchedItemSingleDateMatch = 0;
+  let unmatchedItemMultipleDateMatches = 0;
+  let unmatchedItemMultipleDateMatchesTagMatchFound = 0;
+  let unmatchedItemMultipleDateMatchesTagMatchNotFound = 0;
+
+  let allExifMatchedCount = 0;
+  let notAllExifMatchedCount = 0;
+
+  let noNameMatchOnUnmatchedItemMultipleDateMatches = 0;
+  let singleNameMatchOnUnmatchedItemMultipleDateMatches = 0;
+  let multipleNameMatchOnUnmatchedItemMultipleDateMatches = 0;
 
   let matchedTakeoutFiles: string[] = [];
   for (const unmatchedGoogleMediaItem of unmatchedGoogleMediaItems) {
@@ -482,26 +598,121 @@ const matchGooglePhotosToTakeoutPhotos = async () => {
       takeoutFilesByModifyDate,
     );
     if (matchedTakeoutFiles.length === 0) {
-      noFileNameNoDateMatch++;
+      unmatchedItemNoDateMatch++;
+
     } else if (matchedTakeoutFiles.length === 1) {
-      noFileNameSingleDateMatch++;
+
+      // date match between a previous unmatched item and a single takeout item
+      unmatchedItemSingleDateMatch++;
+      if (matchedGoogleMediaItems.hasOwnProperty(unmatchedGoogleMediaItem.id)) {
+        duplicateGoogleIdsFound++;
+      }
+      matchedGoogleMediaItems[unmatchedGoogleMediaItem.id] = {
+        takeoutFilePath: matchedTakeoutFiles[0],
+        googleMediaItem: unmatchedGoogleMediaItem
+      };
+
     } else {
-      noFileNameMultipleDateMatches++;
+
+      // date match between a previous unmatched item and multiple takeout items
+      unmatchedItemMultipleDateMatches++;
+
+      // find appropriate takeout item
+      const matchedTakeoutFile: string = await getTagsMatch(unmatchedGoogleMediaItem, matchedTakeoutFiles);
+      if (matchedTakeoutFile !== '') {
+        unmatchedItemMultipleDateMatchesTagMatchFound++;
+        if (matchedGoogleMediaItems.hasOwnProperty(unmatchedGoogleMediaItem.id)) {
+          duplicateGoogleIdsFound++;
+        }
+        matchedGoogleMediaItems[unmatchedGoogleMediaItem.id] = {
+          takeoutFilePath: matchedTakeoutFile,
+          googleMediaItem: unmatchedGoogleMediaItem
+        };
+      } else {
+        unmatchedItemMultipleDateMatchesTagMatchNotFound++;
+      }
+
+      // const exifData0: Tags = await getExifData(matchedTakeoutFiles[0]);
+      // let index = 0;
+      // for (index = 1; index < matchedTakeoutFiles.length; index++) {
+      //   const matchedTakeoutFile = matchedTakeoutFiles[index];
+      //   const exifData1: Tags = await(getExifData(matchedTakeoutFile));
+      //   if (!exifMatch(exifData0, exifData1)) {
+      //     console.log(unmatchedGoogleMediaItem);
+      //     break;
+      //   }
+      // }
+      // if (index === matchedTakeoutFiles.length) {
+      //   allExifMatchedCount++;
+      // } else {
+      //   notAllExifMatchedCount++;
+      // }
+
+      // let nameMatchCount = 0;
+      // for (const matchedTakeoutFile of matchedTakeoutFiles) {
+      //   if (path.basename(matchedTakeoutFile) === unmatchedGoogleMediaItem.filename) {
+      //     nameMatchCount++;
+      //   }
+      // }
+
+      // switch (nameMatchCount) {
+      //   case 0:
+      //     noNameMatchOnUnmatchedItemMultipleDateMatches++;
+      //     break;
+      //   case 1:
+      //     singleNameMatchOnUnmatchedItemMultipleDateMatches++;
+      //     break;
+      //   default:
+      //     multipleNameMatchOnUnmatchedItemMultipleDateMatches++;
+      //     break;
+      // }
     }
   }
 
   console.log('');
   console.log('total number of googleMediaItems = ', Object.keys(googleMediaItemsById).length);
-  console.log('unique matches found = ', uniqueFileNameMatches + singleDateMatches + noFileNameSingleDateMatch);
-  console.log('number unaccounted for = ', Object.keys(googleMediaItemsById).length - (uniqueFileNameMatches + singleDateMatches + noFileNameSingleDateMatch));
+  console.log('unique matches found = ', uniqueFileNameMatches + singleDateMatches + unmatchedItemSingleDateMatch + unmatchedItemMultipleDateMatchesTagMatchFound);
+  console.log('number unaccounted for = ', Object.keys(googleMediaItemsById).length - (uniqueFileNameMatches + singleDateMatches + unmatchedItemSingleDateMatch + unmatchedItemMultipleDateMatchesTagMatchFound));
 
+  console.log('');
+  console.log('unique match breakdown');
+  console.log('uniqueFileNameMatches = ', uniqueFileNameMatches); 
+  console.log('singleDateMatches = ', singleDateMatches);
+  console.log('unmatchedItemSingleDateMatch = ', unmatchedItemSingleDateMatch);
+  console.log('unmatchedItemMultipleDateMatchesTagMatchFound = ', unmatchedItemMultipleDateMatchesTagMatchFound);
+
+  console.log('');
   console.log('matchedGoogleMediaItems count = ', Object.keys(matchedGoogleMediaItems).length);
   console.log('unmatchedGoogleMediaItems count = ', unmatchedGoogleMediaItems.length);
   console.log('duplicateGoogleIdsFound count = ', duplicateGoogleIdsFound);
 
-  console.log('noFileNameNoDateMatch = ', noFileNameNoDateMatch);
-  console.log('noFileNameSingleDateMatch = ', noFileNameSingleDateMatch);
-  console.log('noFileNameMultipleDateMatches = ', noFileNameMultipleDateMatches);
+  console.log('');
+  console.log('multipleNameMatchesNoDateMatches = ', multipleNameMatchesNoDateMatches);
+  console.log('multipleNameMatchesMultipleDateMatches = ', multipleNameMatchesMultipleDateMatches);
+
+  console.log('');
+  console.log('tagsMatchMissingGoogleMediaMetadata', tagsMatchMissingGoogleMediaMetadata);
+  console.log('tagsMatchMissingExifDimensionData', tagsMatchMissingExifDimensionData);
+  console.log('tagsMatchDimensionsMismatch', tagsMatchDimensionsMismatch);
+  console.log('tagsMatchMimeTypeMismatch', tagsMatchMimeTypeMismatch);
+  console.log('tagsMatchApertureMismatch', tagsMatchApertureMismatch);
+  console.log('tagsMatchCameraMakeMismatch', tagsMatchCameraMakeMismatch);
+  console.log('tagsMatchCameraModelMismatch', tagsMatchCameraModelMismatch);
+  console.log('tagsMatchIsoMismatch', tagsMatchIsoMismatch);
+  
+  console.log('');
+  console.log('noNameMatchOnUnmatchedItemMultipleDateMatches', noNameMatchOnUnmatchedItemMultipleDateMatches);
+  console.log('singleNameMatchOnUnmatchedItemMultipleDateMatches', singleNameMatchOnUnmatchedItemMultipleDateMatches);
+  console.log('multipleNameMatchOnUnmatchedItemMultipleDateMatches', multipleNameMatchOnUnmatchedItemMultipleDateMatches);
+  console.log('allExifMatchedCount', allExifMatchedCount);
+  console.log('notAllExifMatchedCount', notAllExifMatchedCount);
+
+  console.log('');
+  console.log('unmatchedItemNoDateMatch = ', unmatchedItemNoDateMatch);
+  console.log('unmatchedItemSingleDateMatch = ', unmatchedItemSingleDateMatch);
+  console.log('unmatchedItemMultipleDateMatches = ', unmatchedItemMultipleDateMatches);
+  console.log('unmatchedItemMultipleDateMatchesTagMatchFound = ', unmatchedItemMultipleDateMatchesTagMatchFound);
+  console.log('unmatchedItemMultipleDateMatchesTagMatchNotFound = ', unmatchedItemMultipleDateMatchesTagMatchNotFound);
 
   console.log('');
   console.log('uniqueFileNameMatches = ', uniqueFileNameMatches);
@@ -510,7 +721,6 @@ const matchGooglePhotosToTakeoutPhotos = async () => {
   console.log('multipleFileNameMatches = ', multipleFileNameMatches);
   console.log('singleDateMatches = ', singleDateMatches);
   console.log('multipleDateMatches = ', multipleDateMatches);
-  console.log('noDateMatches = ', noDateMatches);
 
   console.log('');
   console.log('noFileNameMatches = ', noFileNameMatch);
@@ -680,7 +890,7 @@ const getTakeoutFilesMatchingGoogleDate = (
     const takeoutFilesWithSameDate: string[] = takeoutFilesByDate[dt];
     if (takeoutFilePaths.length > 0) {
       for (const matchingTakeoutFile of takeoutFilesWithSameDate) {
-        if (takeoutFilePaths.indexOf(matchingTakeoutFile) === 0) {
+        if (takeoutFilePaths.indexOf(matchingTakeoutFile) >= 0) {
           takeoutFilesWithSameNameAndDate.push(matchingTakeoutFile);
         }
       }

@@ -18,6 +18,15 @@ export const getExifData = async (filePath: string): Promise<any> => {
   return tags;
 };
 
+export const exifMatch = (exif0: Tags, exif1: Tags): boolean => {
+  if (exif0.Make !== exif1.Make) return false;
+  if (exif0.ImageWidth !== exif1.ImageWidth) return false;
+  if (exif0.ImageHeight !== exif1.ImageHeight) return false;
+  if (exif0.ExifImageWidth !== exif1.ExifImageWidth) return false;
+  if (exif0.ExifImageHeight !== exif1.ExifImageHeight) return false;
+  return true;
+}
+
 import { DbMediaItem } from '../types';
 import { getFileBuffer } from './fsUtils';
 

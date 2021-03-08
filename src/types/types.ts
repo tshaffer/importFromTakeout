@@ -67,7 +67,7 @@ export interface GoogleMediaMetadata {
 }
 
 export interface GooglePhoto {
-  apertureNumber: number;
+  apertureFNumber: number;
   cameraMake: string;
   cameraModel: string;
   focalLength: number;
