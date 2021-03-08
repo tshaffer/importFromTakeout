@@ -514,9 +514,17 @@ const matchGooglePhotosToTakeoutPhotos = async () => {
   const unmatchedGoogleMediaItems: GoogleMediaItem[] = [];
   let duplicateGoogleIdsFound = 0;
 
+  let googleMediaItemIdsWithMoreThanOneGoogleMediaItem = 0;
+
   for (const key in googleMediaItemsById) {
+
     if (Object.prototype.hasOwnProperty.call(googleMediaItemsById, key)) {
       const googleMediaItems: GoogleMediaItem[] = googleMediaItemsById[key];
+
+      if (googleMediaItems.length > 1) {
+        googleMediaItemIdsWithMoreThanOneGoogleMediaItem++;
+      }
+
       for (const googleMediaItem of googleMediaItems) {
 
         if (takeoutFilesByFileName.hasOwnProperty(googleMediaItem.filename)) {
@@ -557,6 +565,7 @@ const matchGooglePhotosToTakeoutPhotos = async () => {
                 googleMediaItem
               };
             } else {
+              multipleFileNameMatches++;
               unmatchedGoogleMediaItems.push(googleMediaItem);
               if (matchedTakeoutFiles.length === 0) {
                 multipleNameMatchesNoDateMatches++;
@@ -564,7 +573,6 @@ const matchGooglePhotosToTakeoutPhotos = async () => {
                 multipleNameMatchesMultipleDateMatches++;
               }
             }
-            multipleFileNameMatches++;
           }
         } else {
           noFileNameMatch++;
@@ -573,6 +581,22 @@ const matchGooglePhotosToTakeoutPhotos = async () => {
       }
     }
   }
+
+  console.log('');
+  console.log(Object.keys(googleMediaItemsById).length, '\ttotal number of googleMediaItemsIds');
+  console.log(googleMediaItemIdsWithMoreThanOneGoogleMediaItem, '\tgoogleMediaItemIdsWithMoreThanOneGoogleMediaItem');
+
+  console.log('');
+  console.log(uniqueFileNameMatches, '\tunique file name matches');
+  console.log(singleDateMatches, '\tsingleDateMatches');
+
+  console.log('');
+  console.log(noFileNameMatch, '\tnoFileNameMatches', );
+  console.log(multipleFileNameMatches, '\tmultipleFileNameMatches');
+  console.log(unmatchedGoogleMediaItems.length, '\tunmatchedGoogleMediaItems');
+
+  // console.log(duplicateGoogleIdsFound, '\tduplicateGoogleIdsFound');
+  debugger;
 
   // see if there is a takeout file whose dates match any of the unmatched google media items
   let unmatchedItemNoDateMatch = 0;
@@ -618,35 +642,20 @@ const matchGooglePhotosToTakeoutPhotos = async () => {
       unmatchedItemMultipleDateMatches++;
 
       // find appropriate takeout item
-      const matchedTakeoutFile: string = await getTagsMatch(unmatchedGoogleMediaItem, matchedTakeoutFiles);
-      if (matchedTakeoutFile !== '') {
-        unmatchedItemMultipleDateMatchesTagMatchFound++;
-        if (matchedGoogleMediaItems.hasOwnProperty(unmatchedGoogleMediaItem.id)) {
-          duplicateGoogleIdsFound++;
-        }
-        matchedGoogleMediaItems[unmatchedGoogleMediaItem.id] = {
-          takeoutFilePath: matchedTakeoutFile,
-          googleMediaItem: unmatchedGoogleMediaItem
-        };
-      } else {
-        unmatchedItemMultipleDateMatchesTagMatchNotFound++;
-      }
-
-      // const exifData0: Tags = await getExifData(matchedTakeoutFiles[0]);
-      // let index = 0;
-      // for (index = 1; index < matchedTakeoutFiles.length; index++) {
-      //   const matchedTakeoutFile = matchedTakeoutFiles[index];
-      //   const exifData1: Tags = await(getExifData(matchedTakeoutFile));
-      //   if (!exifMatch(exifData0, exifData1)) {
-      //     console.log(unmatchedGoogleMediaItem);
-      //     break;
+      // const matchedTakeoutFile: string = await getTagsMatch(unmatchedGoogleMediaItem, matchedTakeoutFiles);
+      // if (matchedTakeoutFile !== '') {
+      //   unmatchedItemMultipleDateMatchesTagMatchFound++;
+      //   if (matchedGoogleMediaItems.hasOwnProperty(unmatchedGoogleMediaItem.id)) {
+      //     duplicateGoogleIdsFound++;
       //   }
-      // }
-      // if (index === matchedTakeoutFiles.length) {
-      //   allExifMatchedCount++;
+      //   matchedGoogleMediaItems[unmatchedGoogleMediaItem.id] = {
+      //     takeoutFilePath: matchedTakeoutFile,
+      //     googleMediaItem: unmatchedGoogleMediaItem
+      //   };
       // } else {
-      //   notAllExifMatchedCount++;
+      //   unmatchedItemMultipleDateMatchesTagMatchNotFound++;
       // }
+
 
       // let nameMatchCount = 0;
       // for (const matchedTakeoutFile of matchedTakeoutFiles) {
@@ -669,66 +678,64 @@ const matchGooglePhotosToTakeoutPhotos = async () => {
     }
   }
 
-  console.log('');
-  console.log('total number of googleMediaItems = ', Object.keys(googleMediaItemsById).length);
-  console.log('unique matches found = ', uniqueFileNameMatches + singleDateMatches + unmatchedItemSingleDateMatch + unmatchedItemMultipleDateMatchesTagMatchFound);
-  console.log('number unaccounted for = ', Object.keys(googleMediaItemsById).length - (uniqueFileNameMatches + singleDateMatches + unmatchedItemSingleDateMatch + unmatchedItemMultipleDateMatchesTagMatchFound));
+  // console.log('\t')
+  // console.log('unique matches found = ', uniqueFileNameMatches + singleDateMatches + unmatchedItemSingleDateMatch + unmatchedItemMultipleDateMatchesTagMatchFound);
+  // console.log('number unaccounted for = ', Object.keys(googleMediaItemsById).length - (uniqueFileNameMatches + singleDateMatches + unmatchedItemSingleDateMatch + unmatchedItemMultipleDateMatchesTagMatchFound));
 
-  console.log('');
-  console.log('unique match breakdown');
-  console.log('uniqueFileNameMatches = ', uniqueFileNameMatches); 
-  console.log('singleDateMatches = ', singleDateMatches);
-  console.log('unmatchedItemSingleDateMatch = ', unmatchedItemSingleDateMatch);
-  console.log('unmatchedItemMultipleDateMatchesTagMatchFound = ', unmatchedItemMultipleDateMatchesTagMatchFound);
+  // console.log('');
+  // console.log('unique match breakdown');
+  // console.log('uniqueFileNameMatches = ', uniqueFileNameMatches); 
+  // console.log('singleDateMatches = ', singleDateMatches);
+  // console.log('unmatchedItemSingleDateMatch = ', unmatchedItemSingleDateMatch);
+  // console.log('unmatchedItemMultipleDateMatchesTagMatchFound = ', unmatchedItemMultipleDateMatchesTagMatchFound);
 
-  console.log('');
-  console.log('matchedGoogleMediaItems count = ', Object.keys(matchedGoogleMediaItems).length);
-  console.log('unmatchedGoogleMediaItems count = ', unmatchedGoogleMediaItems.length);
-  console.log('duplicateGoogleIdsFound count = ', duplicateGoogleIdsFound);
+  // console.log('');
+  // console.log('matchedGoogleMediaItems count = ', Object.keys(matchedGoogleMediaItems).length);
+  // console.log('unmatchedGoogleMediaItems count = ', unmatchedGoogleMediaItems.length);
+  // console.log('duplicateGoogleIdsFound count = ', duplicateGoogleIdsFound);
 
-  console.log('');
-  console.log('multipleNameMatchesNoDateMatches = ', multipleNameMatchesNoDateMatches);
-  console.log('multipleNameMatchesMultipleDateMatches = ', multipleNameMatchesMultipleDateMatches);
+  // console.log('');
+  // console.log('multipleNameMatchesNoDateMatches = ', multipleNameMatchesNoDateMatches);
+  // console.log('multipleNameMatchesMultipleDateMatches = ', multipleNameMatchesMultipleDateMatches);
 
-  console.log('');
-  console.log('tagsMatchMissingGoogleMediaMetadata', tagsMatchMissingGoogleMediaMetadata);
-  console.log('tagsMatchMissingExifDimensionData', tagsMatchMissingExifDimensionData);
-  console.log('tagsMatchDimensionsMismatch', tagsMatchDimensionsMismatch);
-  console.log('tagsMatchMimeTypeMismatch', tagsMatchMimeTypeMismatch);
-  console.log('tagsMatchApertureMismatch', tagsMatchApertureMismatch);
-  console.log('tagsMatchCameraMakeMismatch', tagsMatchCameraMakeMismatch);
-  console.log('tagsMatchCameraModelMismatch', tagsMatchCameraModelMismatch);
-  console.log('tagsMatchIsoMismatch', tagsMatchIsoMismatch);
+  // console.log('');
+  // console.log('tagsMatchMissingGoogleMediaMetadata', tagsMatchMissingGoogleMediaMetadata);
+  // console.log('tagsMatchMissingExifDimensionData', tagsMatchMissingExifDimensionData);
+  // console.log('tagsMatchDimensionsMismatch', tagsMatchDimensionsMismatch);
+  // console.log('tagsMatchMimeTypeMismatch', tagsMatchMimeTypeMismatch);
+  // console.log('tagsMatchApertureMismatch', tagsMatchApertureMismatch);
+  // console.log('tagsMatchCameraMakeMismatch', tagsMatchCameraMakeMismatch);
+  // console.log('tagsMatchCameraModelMismatch', tagsMatchCameraModelMismatch);
+  // console.log('tagsMatchIsoMismatch', tagsMatchIsoMismatch);
   
-  console.log('');
-  console.log('noNameMatchOnUnmatchedItemMultipleDateMatches', noNameMatchOnUnmatchedItemMultipleDateMatches);
-  console.log('singleNameMatchOnUnmatchedItemMultipleDateMatches', singleNameMatchOnUnmatchedItemMultipleDateMatches);
-  console.log('multipleNameMatchOnUnmatchedItemMultipleDateMatches', multipleNameMatchOnUnmatchedItemMultipleDateMatches);
-  console.log('allExifMatchedCount', allExifMatchedCount);
-  console.log('notAllExifMatchedCount', notAllExifMatchedCount);
+  // console.log('');
+  // console.log('noNameMatchOnUnmatchedItemMultipleDateMatches', noNameMatchOnUnmatchedItemMultipleDateMatches);
+  // console.log('singleNameMatchOnUnmatchedItemMultipleDateMatches', singleNameMatchOnUnmatchedItemMultipleDateMatches);
+  // console.log('multipleNameMatchOnUnmatchedItemMultipleDateMatches', multipleNameMatchOnUnmatchedItemMultipleDateMatches);
+  // console.log('allExifMatchedCount', allExifMatchedCount);
+  // console.log('notAllExifMatchedCount', notAllExifMatchedCount);
 
-  console.log('');
-  console.log('unmatchedItemNoDateMatch = ', unmatchedItemNoDateMatch);
-  console.log('unmatchedItemSingleDateMatch = ', unmatchedItemSingleDateMatch);
-  console.log('unmatchedItemMultipleDateMatches = ', unmatchedItemMultipleDateMatches);
-  console.log('unmatchedItemMultipleDateMatchesTagMatchFound = ', unmatchedItemMultipleDateMatchesTagMatchFound);
-  console.log('unmatchedItemMultipleDateMatchesTagMatchNotFound = ', unmatchedItemMultipleDateMatchesTagMatchNotFound);
+  // console.log('');
+  // console.log('unmatchedItemNoDateMatch = ', unmatchedItemNoDateMatch);
+  // console.log('unmatchedItemSingleDateMatch = ', unmatchedItemSingleDateMatch);
+  // console.log('unmatchedItemMultipleDateMatches = ', unmatchedItemMultipleDateMatches);
+  // console.log('unmatchedItemMultipleDateMatchesTagMatchFound = ', unmatchedItemMultipleDateMatchesTagMatchFound);
+  // console.log('unmatchedItemMultipleDateMatchesTagMatchNotFound = ', unmatchedItemMultipleDateMatchesTagMatchNotFound);
 
-  console.log('');
-  console.log('uniqueFileNameMatches = ', uniqueFileNameMatches);
-  console.log('');
+  // console.log('');
+  // console.log('uniqueFileNameMatches = ', uniqueFileNameMatches);
+  // console.log('');
 
-  console.log('multipleFileNameMatches = ', multipleFileNameMatches);
-  console.log('singleDateMatches = ', singleDateMatches);
-  console.log('multipleDateMatches = ', multipleDateMatches);
+  // console.log('multipleFileNameMatches = ', multipleFileNameMatches);
+  // console.log('singleDateMatches = ', singleDateMatches);
+  // console.log('multipleDateMatches = ', multipleDateMatches);
 
-  console.log('');
-  console.log('noFileNameMatches = ', noFileNameMatch);
+  // console.log('');
 
-  console.log('');
-  console.log('noTakeoutFilesWithSameDimensions = ', noTakeoutFilesWithSameDimensions);
-  console.log('singleTakeoutFilesWithSameDimensions = ', singleTakeoutFilesWithSameDimensions);
-  console.log('multipleTakeoutFilesWithSameDimensions = ', multipleTakeoutFilesWithSameDimensions);
+  // console.log('');
+  // console.log('noTakeoutFilesWithSameDimensions = ', noTakeoutFilesWithSameDimensions);
+  // console.log('singleTakeoutFilesWithSameDimensions = ', singleTakeoutFilesWithSameDimensions);
+  // console.log('multipleTakeoutFilesWithSameDimensions = ', multipleTakeoutFilesWithSameDimensions);
 
   debugger;
 }
@@ -807,42 +814,42 @@ const getNonDateExifMatch = async (
 
   const takeoutFilesWithSameDimensions: string[] = [];
 
-  for (const takeoutFilePath of takeoutFilePaths) {
-    const exifData: Tags = await getExifData(takeoutFilePath);
-    // console.log('Tags for takeoutFilePath: ', takeoutFilePath);
-    // console.log(exifData);
-    if (isObject(googleMediaItem.mediaMetadata)) {
-      if (isString(googleMediaItem.mediaMetadata.width)) {
-        const gWidth = Number(googleMediaItem.mediaMetadata.width);
-        if (!isNaN(gWidth)) {
-          if (isString(googleMediaItem.mediaMetadata.height)) {
-            const gHeight = Number(googleMediaItem.mediaMetadata.height);
-            if (!isNaN(gHeight)) {
-              if (isNumber(exifData.ImageWidth) && exifData.ImageWidth === gWidth && isNumber(exifData.ImageHeight) && exifData.ImageHeight === gHeight) {
-                takeoutFilesWithSameDimensions.push(takeoutFilePath);
-              } else if (isNumber(exifData.ExifImageWidth) && exifData.ExifImageWidth === gWidth && isNumber(exifData.ExifImageHeight) && exifData.ExifImageHeight === gHeight) {
-                takeoutFilesWithSameDimensions.push(takeoutFilePath);
-              }
-              // check for portrait mode where width and height are swapped
-              else if (isNumber(exifData.ImageWidth) && exifData.ImageWidth === gHeight && isNumber(exifData.ImageHeight) && exifData.ImageHeight === gWidth) {
-                takeoutFilesWithSameDimensions.push(takeoutFilePath);
-              } else if (isNumber(exifData.ExifImageWidth) && exifData.ExifImageWidth === gHeight && isNumber(exifData.ExifImageHeight) && exifData.ExifImageHeight === gWidth) {
-                takeoutFilesWithSameDimensions.push(takeoutFilePath);
-              }
-            }
-          }
-        }
-      }
-    }
-  }
+  // for (const takeoutFilePath of takeoutFilePaths) {
+  //   const exifData: Tags = await getExifData(takeoutFilePath);
+  //   // console.log('Tags for takeoutFilePath: ', takeoutFilePath);
+  //   // console.log(exifData);
+  //   if (isObject(googleMediaItem.mediaMetadata)) {
+  //     if (isString(googleMediaItem.mediaMetadata.width)) {
+  //       const gWidth = Number(googleMediaItem.mediaMetadata.width);
+  //       if (!isNaN(gWidth)) {
+  //         if (isString(googleMediaItem.mediaMetadata.height)) {
+  //           const gHeight = Number(googleMediaItem.mediaMetadata.height);
+  //           if (!isNaN(gHeight)) {
+  //             if (isNumber(exifData.ImageWidth) && exifData.ImageWidth === gWidth && isNumber(exifData.ImageHeight) && exifData.ImageHeight === gHeight) {
+  //               takeoutFilesWithSameDimensions.push(takeoutFilePath);
+  //             } else if (isNumber(exifData.ExifImageWidth) && exifData.ExifImageWidth === gWidth && isNumber(exifData.ExifImageHeight) && exifData.ExifImageHeight === gHeight) {
+  //               takeoutFilesWithSameDimensions.push(takeoutFilePath);
+  //             }
+  //             // check for portrait mode where width and height are swapped
+  //             else if (isNumber(exifData.ImageWidth) && exifData.ImageWidth === gHeight && isNumber(exifData.ImageHeight) && exifData.ImageHeight === gWidth) {
+  //               takeoutFilesWithSameDimensions.push(takeoutFilePath);
+  //             } else if (isNumber(exifData.ExifImageWidth) && exifData.ExifImageWidth === gHeight && isNumber(exifData.ExifImageHeight) && exifData.ExifImageHeight === gWidth) {
+  //               takeoutFilesWithSameDimensions.push(takeoutFilePath);
+  //             }
+  //           }
+  //         }
+  //       }
+  //     }
+  //   }
+  // }
 
-  if (takeoutFilesWithSameDimensions.length <= 1) {
-    console.log('gMediaItem: ', googleMediaItem.filename);
-    console.log('takeoutFiles');
-    console.log('takeoutFilesWithSameDimensions');
-    console.log(takeoutFilesWithSameDimensions);
+  // if (takeoutFilesWithSameDimensions.length <= 1) {
+  //   console.log('gMediaItem: ', googleMediaItem.filename);
+  //   console.log('takeoutFiles');
+  //   console.log('takeoutFilesWithSameDimensions');
+  //   console.log(takeoutFilesWithSameDimensions);
 
-  }
+  // }
   return takeoutFilesWithSameDimensions;
 
 }
