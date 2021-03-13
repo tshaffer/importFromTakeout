@@ -4,7 +4,7 @@ import path from 'path';
 import * as nodeDir from 'node-dir';
 import crypto from 'crypto';
 
-const imageFileExtensions = ['.jpg', '.JPG', '.jpeg', '.JPEG', '.png', '.PNG'];
+const imageFileExtensions = ['.jpg', '.JPG', '.jpeg', '.JPEG', '.png', '.PNG', '.heic', '.HEIC'];
 
 const getFilesInDirectory = (rootDirPath: string) => {
   return nodeDir.files(rootDirPath, { sync: true });
