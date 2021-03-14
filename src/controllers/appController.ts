@@ -68,6 +68,15 @@ type IdToStringArray = {
   [key: string]: string[]
 }
 
+type IdToTakeoutFilesByTimeOfDay = {
+  [key: string]: TakeoutFilesByTimeOfDay;
+}
+
+interface TakeoutFilesByTimeOfDay {
+  dt: number;
+  takeoutFilePaths: string[];
+}
+
 interface MatchedGoogleMediaItem {
   takeoutFilePath: string;
   googleMediaItem: GoogleMediaItem;
@@ -350,8 +359,75 @@ const getTakeoutFilesByName = async () => {
   // await writeJsonToFile('/Users/tedshaffer/Documents/Projects/importFromTakeout/testResults/takeoutFilesByDateTimeOriginal.json', takeoutFilesByDateTimeOriginal);
   // await writeJsonToFile('/Users/tedshaffer/Documents/Projects/importFromTakeout/testResults/takeoutFilesByModifyDate.json', takeoutFilesByModifyDate);
   // await writeJsonToFile('/Users/tedshaffer/Documents/Projects/importFromTakeout/testResults/takeoutFilesByImageDimensions.json', takeoutFilesByImageDimensions);
+}
 
-  debugger;
+const getZeroHourDateTime = (ts: any): number | null => {
+
+  const zeroHourDateTime: Date = new Date(ts);
+
+  // day of month: getDate()
+  // year (2018): getFullYear()
+  // minutes: getMinutes()
+  // seconds: getSeconds()
+  // milliseconds: getMilliseconds() - ever not zero and not 999?
+
+  // date consists of year, month, minute, second, millisecond
+  zeroHourDateTime.setDate(0);
+  zeroHourDateTime.setHours(0);
+
+  return Date.parse(zeroHourDateTime.toString());
+}
+
+const addTakeoutFileByTimeOfDay = (takeoutFilesByTimeOfDay: IdToTakeoutFilesByTimeOfDay, filePath: string, dt: any) => {
+  
+  const dtSinceZero = getDateTimeSinceZero(dt);
+  if (isNaN(dtSinceZero) || dtSinceZero < 0) {
+    return;
+  }
+  
+  const ts: number | null = getZeroHourDateTime(dtSinceZero);
+  if (!isNil(ts) && ts > 0) {
+    const tsKey = ts.toString();
+    if (!takeoutFilesByTimeOfDay.hasOwnProperty(tsKey)) {
+      takeoutFilesByTimeOfDay[tsKey] = {
+        dt: dtSinceZero,
+        takeoutFilePaths: [],
+      };
+      takeoutFilesByTimeOfDay[tsKey].takeoutFilePaths = [];
+    }
+    takeoutFilesByTimeOfDay[tsKey].takeoutFilePaths.push(filePath);
+  }
+}
+
+
+const buildTakeoutFilesByTimeOfDay = async () => {
+
+  const takeoutFilesByCreateDateTimeOfDay: IdToTakeoutFilesByTimeOfDay = {};
+  const takeoutFilesByDateTimeOriginalTimeOfDay: IdToTakeoutFilesByTimeOfDay = {};
+  const takeoutFilesByModifyDateTimeOfDay: IdToTakeoutFilesByTimeOfDay = {};
+
+  const filePaths: string[] = getImageFilePaths(mediaItemsDir);
+
+  let fileCount = 0;
+
+  for (let filePath of filePaths) {
+
+    const exifData: Tags = await getExifData(filePath);
+
+    addTakeoutFileByTimeOfDay(takeoutFilesByCreateDateTimeOfDay, filePath, exifData.CreateDate);
+    addTakeoutFileByTimeOfDay(takeoutFilesByDateTimeOriginalTimeOfDay, filePath, exifData.DateTimeOriginal);
+    addTakeoutFileByTimeOfDay(takeoutFilesByModifyDateTimeOfDay, filePath, exifData.ModifyDate);
+
+    fileCount++;
+    // if (fileCount === 100) {
+    //   break;
+    // }
+  }
+
+  // await writeJsonToFile('/Users/tedshaffer/Documents/Projects/importFromTakeout/testResults/takeoutFilesByCreateDateTimeOfDay.json', takeoutFilesByCreateDateTimeOfDay);
+  // await writeJsonToFile('/Users/tedshaffer/Documents/Projects/importFromTakeout/testResults/takeoutFilesByDateTimeOriginalTimeOfDay.json', takeoutFilesByDateTimeOriginalTimeOfDay);
+  // await writeJsonToFile('/Users/tedshaffer/Documents/Projects/importFromTakeout/testResults/takeoutFilesByModifyDateTimeOfDay.json', takeoutFilesByModifyDateTimeOfDay);
+
 }
 
 const addTakeoutFileByFileName = (takeoutFilesByFileName: IdToStringArray, filePath: string, fileName: string) => {
@@ -419,7 +495,7 @@ const matchTags = (googleMediaItem: GoogleMediaItem, exifData: Tags): boolean =>
   if (isObject(googleMediaItem.mediaMetadata)) {
 
     const mediaMetadata: GoogleMediaMetadata = googleMediaItem.mediaMetadata;
-    
+
     if (isString(mediaMetadata.width) && isString(mediaMetadata.height)) {
       if (isNumber(exifData.ImageWidth) && isNumber(exifData.ImageHeight)) {
         if (Number(mediaMetadata.width) !== exifData.ImageWidth || Number(mediaMetadata.width) !== exifData.ImageWidth) {
@@ -453,7 +529,7 @@ const matchTags = (googleMediaItem: GoogleMediaItem, exifData: Tags): boolean =>
         if (isString(exifData.Model) && exifData.Model !== photoMetadata.cameraModel) {
           tagsMatchCameraModelMismatch++;
           return false;
-        }        
+        }
       }
 
       // if (isNumber(photoMetadata.focalLength)) {
@@ -464,7 +540,7 @@ const matchTags = (googleMediaItem: GoogleMediaItem, exifData: Tags): boolean =>
         if (isNumber(exifData.ISO) && exifData.ISO !== photoMetadata.isoEquivalent) {
           tagsMatchIsoMismatch++;
           return false;
-        }        
+        }
       }
     }
 
@@ -496,6 +572,10 @@ const matchGooglePhotosToTakeoutPhotos = async () => {
   const takeoutFilesByCreateDate: IdToStringArray = await getJsonFromFile('/Users/tedshaffer/Documents/Projects/importFromTakeout/testResults/takeoutFilesByCreateDate.json');
   const takeoutFilesByDateTimeOriginal: IdToStringArray = await getJsonFromFile('/Users/tedshaffer/Documents/Projects/importFromTakeout/testResults/takeoutFilesByDateTimeOriginal.json');
   const takeoutFilesByModifyDate: IdToStringArray = await getJsonFromFile('/Users/tedshaffer/Documents/Projects/importFromTakeout/testResults/takeoutFilesByModifyDate.json');
+
+  const takeoutFilesByCreateDateTimeOfDay: IdToTakeoutFilesByTimeOfDay = await getJsonFromFile('/Users/tedshaffer/Documents/Projects/importFromTakeout/testResults/takeoutFilesByCreateDateTimeOfDay.json');
+  const takeoutFilesByDateTimeOriginalTimeOfDay: IdToTakeoutFilesByTimeOfDay = await getJsonFromFile('/Users/tedshaffer/Documents/Projects/importFromTakeout/testResults/takeoutFilesByDateTimeOriginalTimeOfDay.json');
+  const takeoutFilesByModifyDateTimeOfDay: IdToTakeoutFilesByTimeOfDay = await getJsonFromFile('/Users/tedshaffer/Documents/Projects/importFromTakeout/testResults/takeoutFilesByModifyDateTimeOfDay.json');
 
   let uniqueFileNameMatches = 0;
   let singleDateMatches = 0;
@@ -588,15 +668,12 @@ const matchGooglePhotosToTakeoutPhotos = async () => {
 
   console.log('');
   console.log(uniqueFileNameMatches, '\tunique file name matches');
-  console.log(singleDateMatches, '\tsingleDateMatches');
+  console.log(singleDateMatches, '\tsingleDateMatches where there were multiple file name matches');
 
   console.log('');
-  console.log(noFileNameMatch, '\tnoFileNameMatches', );
+  console.log(noFileNameMatch, '\tnoFileNameMatches',);
   console.log(multipleFileNameMatches, '\tmultipleFileNameMatches');
   console.log(unmatchedGoogleMediaItems.length, '\tunmatchedGoogleMediaItems');
-
-  // console.log(duplicateGoogleIdsFound, '\tduplicateGoogleIdsFound');
-  debugger;
 
   // see if there is a takeout file whose dates match any of the unmatched google media items
   let unmatchedItemNoDateMatch = 0;
@@ -612,7 +689,10 @@ const matchGooglePhotosToTakeoutPhotos = async () => {
   let singleNameMatchOnUnmatchedItemMultipleDateMatches = 0;
   let multipleNameMatchOnUnmatchedItemMultipleDateMatches = 0;
 
+  let matchedNoTimeZoneFilesCount = 0;
+
   let matchedTakeoutFiles: string[] = [];
+  const stillUnmatchedGoogleMediaItems: GoogleMediaItem[] = [];
   for (const unmatchedGoogleMediaItem of unmatchedGoogleMediaItems) {
     matchedTakeoutFiles = getTakeoutFileWithMatchingNameAndDate(
       unmatchedGoogleMediaItem,
@@ -622,11 +702,25 @@ const matchGooglePhotosToTakeoutPhotos = async () => {
       takeoutFilesByModifyDate,
     );
     if (matchedTakeoutFiles.length === 0) {
-      unmatchedItemNoDateMatch++;
 
+      // there is no takeout file with a date match
+      unmatchedItemNoDateMatch++;
+      stillUnmatchedGoogleMediaItems.push(unmatchedGoogleMediaItem);
+
+      // see if there is a no time zone date/time match
+      const matchedNoTimeZoneFiles = getTakeoutFilesWithMatchingNoTimeZoneDateTime(
+        unmatchedGoogleMediaItem,
+        takeoutFilesByCreateDateTimeOfDay,
+        takeoutFilesByDateTimeOriginalTimeOfDay,
+        takeoutFilesByModifyDateTimeOfDay, 
+      );
+      if (matchedNoTimeZoneFiles.length > 0) {
+        matchedNoTimeZoneFilesCount++;
+      }
+  
     } else if (matchedTakeoutFiles.length === 1) {
 
-      // date match between a previous unmatched item and a single takeout item
+      // single date match between a previous unmatched item and a takeout item
       unmatchedItemSingleDateMatch++;
       if (matchedGoogleMediaItems.hasOwnProperty(unmatchedGoogleMediaItem.id)) {
         duplicateGoogleIdsFound++;
@@ -637,26 +731,39 @@ const matchGooglePhotosToTakeoutPhotos = async () => {
       };
 
     } else {
+      // see if there is a no time zone date/time match
+      const matchedNoTimeZoneFiles = getTakeoutFilesWithMatchingNoTimeZoneDateTime(
+        unmatchedGoogleMediaItem,
+        takeoutFilesByCreateDateTimeOfDay,
+        takeoutFilesByDateTimeOriginalTimeOfDay,
+        takeoutFilesByModifyDateTimeOfDay, 
+      );
+      if (matchedNoTimeZoneFiles.length > 0) {
+        matchedNoTimeZoneFilesCount++;
+      }
+      
+      stillUnmatchedGoogleMediaItems.push(unmatchedGoogleMediaItem);
 
-      // date match between a previous unmatched item and multiple takeout items
+/*
+      // this is a date match between a previous unmatched item and multiple takeout items
       unmatchedItemMultipleDateMatches++;
 
-      // find appropriate takeout item
-      // const matchedTakeoutFile: string = await getTagsMatch(unmatchedGoogleMediaItem, matchedTakeoutFiles);
-      // if (matchedTakeoutFile !== '') {
-      //   unmatchedItemMultipleDateMatchesTagMatchFound++;
-      //   if (matchedGoogleMediaItems.hasOwnProperty(unmatchedGoogleMediaItem.id)) {
-      //     duplicateGoogleIdsFound++;
-      //   }
-      //   matchedGoogleMediaItems[unmatchedGoogleMediaItem.id] = {
-      //     takeoutFilePath: matchedTakeoutFile,
-      //     googleMediaItem: unmatchedGoogleMediaItem
-      //   };
-      // } else {
-      //   unmatchedItemMultipleDateMatchesTagMatchNotFound++;
-      // }
-
-
+      // search for matching takeout item, based on exif tags
+      const matchedTakeoutFile: string = await getTagsMatch(unmatchedGoogleMediaItem, matchedTakeoutFiles);
+      if (matchedTakeoutFile !== '') {
+        unmatchedItemMultipleDateMatchesTagMatchFound++;
+        if (matchedGoogleMediaItems.hasOwnProperty(unmatchedGoogleMediaItem.id)) {
+          duplicateGoogleIdsFound++;
+        }
+        matchedGoogleMediaItems[unmatchedGoogleMediaItem.id] = {
+          takeoutFilePath: matchedTakeoutFile,
+          googleMediaItem: unmatchedGoogleMediaItem
+        };
+      } else {
+        unmatchedItemMultipleDateMatchesTagMatchNotFound++;
+        stillUnmatchedGoogleMediaItems.push(unmatchedGoogleMediaItem);
+      }
+*/
       // let nameMatchCount = 0;
       // for (const matchedTakeoutFile of matchedTakeoutFiles) {
       //   if (path.basename(matchedTakeoutFile) === unmatchedGoogleMediaItem.filename) {
@@ -677,6 +784,52 @@ const matchGooglePhotosToTakeoutPhotos = async () => {
       // }
     }
   }
+
+  console.log('');
+  console.log('Date matches for the remaining unmatched google media items.')
+  console.log(unmatchedItemSingleDateMatch, '\tSingle date matches');
+  console.log(unmatchedItemNoDateMatch, '\tNo date matches');
+  console.log(unmatchedItemMultipleDateMatches, '\tMultiple date matches');
+
+  console.log('');
+  console.log('For the multiple date matches directly above:')
+  console.log(unmatchedItemMultipleDateMatchesTagMatchFound, '\tTag match found');
+  console.log(unmatchedItemMultipleDateMatchesTagMatchNotFound, '\tNo tag match found');
+
+  console.log('');
+  console.log('Summary of matches');
+  console.log(uniqueFileNameMatches, '\tUnique file name matches');
+  console.log(singleDateMatches, '\tSingleDateMatches where there were multiple file name matches');
+  console.log(unmatchedItemSingleDateMatch, '\tSingle date matches for other files');
+  console.log(unmatchedItemMultipleDateMatchesTagMatchFound, '\tMultiple date matches found, tag match found');
+
+  console.log('');
+  console.log(stillUnmatchedGoogleMediaItems.length, '\tstillUnmatchedGoogleMediaItems count');
+
+  console.log('');
+  console.log('matchedNoTimeZoneFilesCount');
+  console.log(matchedNoTimeZoneFilesCount);
+
+  console.log('');
+  console.log('numTimeDeltasMatched');
+  console.log(numTimeDeltasMatched);
+  console.log('maxTimeDelta');
+  console.log(maxTimeDelta);
+  console.log('minTimeDelta');
+  console.log(minTimeDelta);
+  console.log('numTimeDeltas');
+  console.log(numTimeDeltas);
+  console.log('average time delta');
+  console.log(timeDeltasSum / numTimeDeltas);
+
+  const stillUnmatchedGoogleMediaItemsById: any = {};
+  for (const stillUnmatchedGoogleMediaItem of stillUnmatchedGoogleMediaItems) {
+    stillUnmatchedGoogleMediaItemsById[stillUnmatchedGoogleMediaItem.id] = stillUnmatchedGoogleMediaItem;
+  }
+  const stillUnmatchedGoogleMediaItemsStream: any = openWriteStream('/Volumes/SHAFFEROTO/takeout/unzipped/stillUnmatchedGoogleMediaItems.json');
+  const stillUnmatchedGoogleMediaItemsAsStr = JSON.stringify(stillUnmatchedGoogleMediaItemsById);
+  writeToWriteStream(stillUnmatchedGoogleMediaItemsStream, stillUnmatchedGoogleMediaItemsAsStr);
+  closeStream(stillUnmatchedGoogleMediaItemsStream);
 
   // console.log('\t')
   // console.log('unique matches found = ', uniqueFileNameMatches + singleDateMatches + unmatchedItemSingleDateMatch + unmatchedItemMultipleDateMatchesTagMatchFound);
@@ -707,7 +860,7 @@ const matchGooglePhotosToTakeoutPhotos = async () => {
   // console.log('tagsMatchCameraMakeMismatch', tagsMatchCameraMakeMismatch);
   // console.log('tagsMatchCameraModelMismatch', tagsMatchCameraModelMismatch);
   // console.log('tagsMatchIsoMismatch', tagsMatchIsoMismatch);
-  
+
   // console.log('');
   // console.log('noNameMatchOnUnmatchedItemMultipleDateMatches', noNameMatchOnUnmatchedItemMultipleDateMatches);
   // console.log('singleNameMatchOnUnmatchedItemMultipleDateMatches', singleNameMatchOnUnmatchedItemMultipleDateMatches);
@@ -762,6 +915,55 @@ const addUniqueFiles = (existingFilePaths: string[], newFilePaths: string[]): st
     }
   }
   return uniqueFilePaths;
+}
+
+let maxTimeDelta = 0;
+let minTimeDelta = 99999999;
+let numTimeDeltas = 0;
+let timeDeltasSum = 0;
+let msecInOneDay = 86400000;
+let numTimeDeltasMatched = 0;
+
+const getTakeoutFilesWithMatchingNoTimeZoneDateTime = (
+  googleMediaItem: GoogleMediaItem,
+  takeoutFilesByCreateDate: IdToTakeoutFilesByTimeOfDay,
+  takeoutFilesByDateTimeOriginal: IdToTakeoutFilesByTimeOfDay,
+  takeoutFilesByModifyDate: IdToTakeoutFilesByTimeOfDay,
+): string[] => {
+
+  const googleDtNumber = Date.parse(googleMediaItem.mediaMetadata.creationTime as unknown as string);
+  const googleDt: Date = new Date(googleDtNumber);
+  googleDt.setDate(0);
+  googleDt.setHours(0);
+
+  const dtKey = Date.parse((new Date(googleDt)).toString());
+
+  let takeoutFilesWithSameNameAndDate: string[] = [];
+
+  if (takeoutFilesByCreateDate.hasOwnProperty(dtKey)) {
+
+    const timeDelta = Math.abs(googleDtNumber - takeoutFilesByCreateDate[dtKey].dt);
+
+    if (timeDelta <= msecInOneDay) {
+      numTimeDeltasMatched++;
+    }
+
+    if (timeDelta > maxTimeDelta) {
+      maxTimeDelta = timeDelta;
+    }
+    if (timeDelta < minTimeDelta) {
+      minTimeDelta = timeDelta;
+    }
+    numTimeDeltas++;
+    timeDeltasSum += timeDelta;
+
+    const takeoutFilesWithSameNoTimeZoneDate: string[] = takeoutFilesByCreateDate[dtKey].takeoutFilePaths;
+    takeoutFilesWithSameNameAndDate = takeoutFilesWithSameNoTimeZoneDate.map((takeoutFileWithSameDate: string) => {
+      return takeoutFileWithSameDate;
+    })
+  }
+
+  return takeoutFilesWithSameNameAndDate;
 }
 
 const getTakeoutFileWithMatchingNameAndDate = (
@@ -913,6 +1115,9 @@ const getTakeoutFilesMatchingGoogleDate = (
 }
 
 const runMatchExperiments = async (authService: AuthService) => {
+
+  // await buildTakeoutFilesByTimeOfDay();
+  // debugger;
 
   await matchGooglePhotosToTakeoutPhotos();
   debugger;
@@ -1267,7 +1472,13 @@ const getDateTimeMatchResultsType = async (gPhotoCreationTimeSpec: string, fileP
   }
 }
 
+const mediaItemByTimezone: any = {};
+let mediaItemsWithTimezone = 0;
+let exifDateTimesWithoutTimezone = 0;
+let mediaItemsCounted = 0;
+
 const getDateTimeSinceZero = (dt: any): number => {
+  mediaItemsCounted++;
   let ts = -1;
   try {
     if (!isNil(dt)) {
@@ -1275,6 +1486,16 @@ const getDateTimeSinceZero = (dt: any): number => {
         ts = Date.parse(dt);
       } else {
         ts = Date.parse((dt as ExifDateTime).toISOString());
+        if (isNumber((dt as ExifDateTime).tzoffsetMinutes)) {
+          const key: string = (dt as ExifDateTime).tzoffsetMinutes.toString();
+          if (!mediaItemByTimezone.hasOwnProperty(key)) {
+            mediaItemByTimezone[key] = 0;
+          }
+          mediaItemByTimezone[key] = mediaItemByTimezone[key] + 1;
+          mediaItemsWithTimezone++;
+        } else {
+          exifDateTimesWithoutTimezone++;
+        }
       }
     }
   } catch (error) {
