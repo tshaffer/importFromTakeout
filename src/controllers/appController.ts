@@ -1490,7 +1490,7 @@ const matchGooglePhotosToTakeoutPhotos_1 = async (
 }
 
 const matchGooglePhotosToTakeoutPhotos_2 = async (
-  matchedGoogleMediaItems: IdToMatchedGoogleMediaItem, 
+  matchedGoogleMediaItems: IdToMatchedGoogleMediaItem,
   unmatchedGoogleMediaItems: IdToGoogleMediaItems) => {
 
   const takeoutFilesByCreateDate: IdToStringArray = await getJsonFromFile('/Users/tedshaffer/Documents/Projects/importFromTakeout/testResults/takeoutFilesByCreateDate.json');
@@ -1518,7 +1518,7 @@ const matchGooglePhotosToTakeoutPhotos_2 = async (
         if (matchedTakeoutFiles.length === 0) {
 
           // there is no takeout file with a date/time match
-    
+
           // see if there is a no time zone date/time match
           const matchedNoTimeZoneFiles = getTakeoutFilesWithMatchingNoTimeZoneDateTime(
             unmatchedGoogleMediaItem,
@@ -1526,7 +1526,7 @@ const matchGooglePhotosToTakeoutPhotos_2 = async (
             takeoutFilesByDateTimeOriginalTimeOfDay,
             takeoutFilesByModifyDateTimeOfDay,
           );
-    
+
           if (matchedNoTimeZoneFiles.length > 0) {
 
             matchedGoogleMediaItems[unmatchedGoogleMediaItem.id] = {
@@ -1537,19 +1537,19 @@ const matchGooglePhotosToTakeoutPhotos_2 = async (
           } else {
             stillUnmatchedGoogleMediaItems.push(unmatchedGoogleMediaItem);
           }
-    
+
         } else if (matchedTakeoutFiles.length === 1) {
-    
+
           // single date match between a previous unmatched item and a takeout item
           matchedGoogleMediaItems[unmatchedGoogleMediaItem.id] = {
             takeoutFilePath: matchedTakeoutFiles[0],
             googleMediaItem: unmatchedGoogleMediaItem
           };
-    
+
         } else {
-    
+
           // check the order of the next two tests...
-    
+
           // see if there is a no time zone date/time match
           const matchedNoTimeZoneFiles = getTakeoutFilesWithMatchingNoTimeZoneDateTime(
             unmatchedGoogleMediaItem,
@@ -1564,7 +1564,7 @@ const matchGooglePhotosToTakeoutPhotos_2 = async (
               googleMediaItem: unmatchedGoogleMediaItem
             };
           } else {
-    
+
             // search for matching takeout item, based on exif tags
             const matchedTakeoutFile: string = await getTagsMatch(unmatchedGoogleMediaItem, matchedTakeoutFiles);
             if (matchedTakeoutFile !== '') {
@@ -1585,6 +1585,67 @@ const matchGooglePhotosToTakeoutPhotos_2 = async (
     matchedTakeoutFiles,
     unmatchedGoogleMediaItems: stillUnmatchedGoogleMediaItems
   };
+  return results;
+}
+
+const matchGooglePhotosToTakeoutPhotos_3 = async (
+  takeoutFilesByFileName: IdToStringArray,
+  matchedGoogleMediaItems: IdToMatchedGoogleMediaItem,
+  stillUnmatchedGoogleMediaItems: GoogleMediaItem[]) => {
+
+  const remainingUnmatchedGoogleMediaItems: GoogleMediaItem[] = [];
+  const remainingUnmatchedGoogleMediaItemsMultipleFileNameMatches: GoogleMediaItem[] = [];
+  const remainingUnmatchedGoogleMediaItemsNoFileNameMatches: GoogleMediaItem[] = [];
+  const unimportantUnmatchedGoogleMediaItems: GoogleMediaItem[] = [];
+
+
+  for (const stillUnmatchedGoogleMediaItem of stillUnmatchedGoogleMediaItems) {
+    const fileName = stillUnmatchedGoogleMediaItem.filename;
+    if (takeoutFilesByFileName.hasOwnProperty(fileName)) {
+      const takeoutFilePaths: string[] = takeoutFilesByFileName[fileName];
+      if (takeoutFilePaths.length > 1) {
+        remainingUnmatchedGoogleMediaItems.push(stillUnmatchedGoogleMediaItem);
+        remainingUnmatchedGoogleMediaItemsMultipleFileNameMatches.push(stillUnmatchedGoogleMediaItem);
+      } else {
+        debugger;
+      }
+    } else {
+
+      const lowerCaseExtension: string = path.extname(fileName).toLowerCase();
+
+      if (lowerCaseExtension === '.mov') {
+        unimportantUnmatchedGoogleMediaItems.push(stillUnmatchedGoogleMediaItem);
+      } else if (lowerCaseExtension === '.mp4') {
+        unimportantUnmatchedGoogleMediaItems.push(stillUnmatchedGoogleMediaItem);
+      } else if (lowerCaseExtension === '.bmp') {
+        unimportantUnmatchedGoogleMediaItems.push(stillUnmatchedGoogleMediaItem);
+      } else if (lowerCaseExtension === '.mpg') {
+        unimportantUnmatchedGoogleMediaItems.push(stillUnmatchedGoogleMediaItem);
+      } else if (lowerCaseExtension === '.nef') {
+        unimportantUnmatchedGoogleMediaItems.push(stillUnmatchedGoogleMediaItem);
+      } else if (fileName.includes('Scan')) {
+        unimportantUnmatchedGoogleMediaItems.push(stillUnmatchedGoogleMediaItem);
+      } else {
+        const truncatedFileNameMatches: string[] = getTruncatedFileNameMatches(takeoutFilesByFileName, fileName);
+        if (truncatedFileNameMatches.length > 0) {
+          matchedGoogleMediaItems[stillUnmatchedGoogleMediaItem.id] = {
+            takeoutFilePath: truncatedFileNameMatches[0],
+            googleMediaItem: stillUnmatchedGoogleMediaItem
+          };
+        } else {
+          remainingUnmatchedGoogleMediaItems.push(stillUnmatchedGoogleMediaItem);
+          remainingUnmatchedGoogleMediaItemsNoFileNameMatches.push(stillUnmatchedGoogleMediaItem);
+        }
+      }
+    }
+  }
+
+  const results: any = {
+    remainingUnmatchedGoogleMediaItemsNoFileNameMatches,
+    remainingUnmatchedGoogleMediaItemsMultipleFileNameMatches,
+    unimportantUnmatchedGoogleMediaItems
+  };
+
   return results;
 }
 
