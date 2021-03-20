@@ -52,6 +52,12 @@ interface MatchedPhoto {
   exactMatch: boolean;
 }
 
+interface FirstPassResults {
+  matchedGoogleMediaItems: IdToMatchedGoogleMediaItem;
+  unmatchedGoogleMediaItems: IdToGoogleMediaItems;
+  googleMediaItemsToMultipleTakeoutFiles: IdToStringArray;
+}
+
 type IdToGoogleMediaItem = {
   [key: string]: GoogleMediaItem
 }
@@ -591,7 +597,7 @@ const getTruncatedFileNameMatches = (filesByFileName: any, fileName: string): st
   return [];
 }
 
-const matchGooglePhotosToTakeoutPhotos = async () => {
+const old_matchGooglePhotosToTakeoutPhotos = async () => {
 
   const googleMediaItemsById: IdToGoogleMediaItems = await getJsonFromFile('/Users/tedshaffer/Documents/Projects/importFromTakeout/testResults/googleMediaItemsById.json');
   const takeoutFilesByFileName: IdToStringArray = await getJsonFromFile('/Users/tedshaffer/Documents/Projects/importFromTakeout/testResults/takeoutFilesByFileName.json');
@@ -1370,7 +1376,7 @@ const searchForGpsDataInMultipleFileNameMatches = async () => {
   const googleMediaItemsWhereAtLeastOneTakeoutFileHasGps: any = {};
 
   for (const googleMediaItem of remainingUnmatchedGoogleMediaItemsMultipleFileNameMatches) {
-    const takeoutFilesWithSameFileName = takeoutFilesByFileName[googleMediaItem.filename];
+    const takeoutFilesWithSameFileName: string[] = takeoutFilesByFileName[googleMediaItem.filename];
     let filesWithNoDateTime = 0;
     let fileWithNoDateTimeHasGPS = false;
     let oneOfTakeoutFilesHasGps = false;
@@ -1442,11 +1448,57 @@ const searchForGpsDataInMultipleFileNameMatches = async () => {
 
   console.log(atLeastOneTakeoutFileHasGpsForGoogleMediaItemCount);
 
-
   debugger;
 }
 
+const matchGooglePhotosToTakeoutPhotos = async (
+  googleMediaItemsById: IdToGoogleMediaItems, 
+  takeoutFilesByFileName: IdToStringArray)
+  : Promise<FirstPassResults> => {
+
+  const matchedGoogleMediaItems: IdToMatchedGoogleMediaItem = {};
+  const unmatchedGoogleMediaItems: IdToGoogleMediaItems = {};
+  const googleMediaItemsToMultipleTakeoutFiles: IdToStringArray = {};
+
+  for (const key in googleMediaItemsById) {
+    if (Object.prototype.hasOwnProperty.call(googleMediaItemsById, key)) {
+      const googleMediaItems: GoogleMediaItem[] = googleMediaItemsById[key];
+      for (const googleMediaItem of googleMediaItems) {
+        if (takeoutFilesByFileName.hasOwnProperty(googleMediaItem.filename)) {
+          const takeoutFilePaths: string[] = takeoutFilesByFileName[googleMediaItem.filename];
+          if (takeoutFilePaths.length === 1) {
+            matchedGoogleMediaItems[googleMediaItem.id] = {
+              takeoutFilePath: takeoutFilePaths[0],
+              googleMediaItem
+            };
+          } else {
+            googleMediaItemsToMultipleTakeoutFiles[googleMediaItem.id] = takeoutFilePaths;
+            unmatchedGoogleMediaItems[googleMediaItem.id] = googleMediaItemsById[googleMediaItem.id];
+          }
+        } else {
+          unmatchedGoogleMediaItems[googleMediaItem.id] = googleMediaItemsById[googleMediaItem.id];
+        }
+      }
+    }
+  }
+  const results: FirstPassResults = {
+    matchedGoogleMediaItems,
+    unmatchedGoogleMediaItems,
+    googleMediaItemsToMultipleTakeoutFiles
+  };
+  return results;
+}
+
 const runMatchExperiments = async (authService: AuthService) => {
+
+  const googleMediaItemsById: IdToGoogleMediaItems = await getJsonFromFile('/Users/tedshaffer/Documents/Projects/importFromTakeout/testResults/googleMediaItemsById.json');
+  const takeoutFilesByFileName: IdToStringArray = await getJsonFromFile('/Users/tedshaffer/Documents/Projects/importFromTakeout/testResults/takeoutFilesByFileName.json');
+
+  const results: FirstPassResults = await matchGooglePhotosToTakeoutPhotos(googleMediaItemsById, takeoutFilesByFileName);
+  const { matchedGoogleMediaItems, unmatchedGoogleMediaItems, googleMediaItemsToMultipleTakeoutFiles } = results;
+  
+  console.log(results);
+  debugger;
 
   await matchUnmatchedFiles();
   debugger;
@@ -1454,13 +1506,13 @@ const runMatchExperiments = async (authService: AuthService) => {
   await getExifDataByGoogleIdForGoogleMediaItemsWithMultipleFileNameMatchesAndGpsData();
   debugger;
 
-  // await searchForGpsDataInMultipleFileNameMatches();
+  await searchForGpsDataInMultipleFileNameMatches();
   // debugger;
 
   // await buildTakeoutFilesByTimeOfDay();
   // debugger;
 
-  await matchGooglePhotosToTakeoutPhotos();
+  await old_matchGooglePhotosToTakeoutPhotos;
   debugger;
 
   await getTakeoutFilesByName();
