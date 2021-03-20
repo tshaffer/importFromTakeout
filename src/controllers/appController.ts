@@ -1451,8 +1451,8 @@ const searchForGpsDataInMultipleFileNameMatches = async () => {
   debugger;
 }
 
-const matchGooglePhotosToTakeoutPhotos = async (
-  googleMediaItemsById: IdToGoogleMediaItems, 
+const matchGooglePhotosToTakeoutPhotos_1 = async (
+  googleMediaItemsById: IdToGoogleMediaItems,
   takeoutFilesByFileName: IdToStringArray)
   : Promise<FirstPassResults> => {
 
@@ -1489,15 +1489,118 @@ const matchGooglePhotosToTakeoutPhotos = async (
   return results;
 }
 
+const matchGooglePhotosToTakeoutPhotos_2 = async (
+  matchedGoogleMediaItems: IdToMatchedGoogleMediaItem, 
+  unmatchedGoogleMediaItems: IdToGoogleMediaItems) => {
+
+  const takeoutFilesByCreateDate: IdToStringArray = await getJsonFromFile('/Users/tedshaffer/Documents/Projects/importFromTakeout/testResults/takeoutFilesByCreateDate.json');
+  const takeoutFilesByDateTimeOriginal: IdToStringArray = await getJsonFromFile('/Users/tedshaffer/Documents/Projects/importFromTakeout/testResults/takeoutFilesByDateTimeOriginal.json');
+  const takeoutFilesByModifyDate: IdToStringArray = await getJsonFromFile('/Users/tedshaffer/Documents/Projects/importFromTakeout/testResults/takeoutFilesByModifyDate.json');
+
+  const takeoutFilesByCreateDateTimeOfDay: IdToTakeoutFilesByTimeOfDay = await getJsonFromFile('/Users/tedshaffer/Documents/Projects/importFromTakeout/testResults/takeoutFilesByCreateDateTimeOfDay.json');
+  const takeoutFilesByDateTimeOriginalTimeOfDay: IdToTakeoutFilesByTimeOfDay = await getJsonFromFile('/Users/tedshaffer/Documents/Projects/importFromTakeout/testResults/takeoutFilesByDateTimeOriginalTimeOfDay.json');
+  const takeoutFilesByModifyDateTimeOfDay: IdToTakeoutFilesByTimeOfDay = await getJsonFromFile('/Users/tedshaffer/Documents/Projects/importFromTakeout/testResults/takeoutFilesByModifyDateTimeOfDay.json');
+
+  let matchedTakeoutFiles: string[] = [];
+  const stillUnmatchedGoogleMediaItems: GoogleMediaItem[] = [];
+
+  for (const key in unmatchedGoogleMediaItems) {
+    if (Object.prototype.hasOwnProperty.call(unmatchedGoogleMediaItems, key)) {
+      const unmatchedGoogleMediaItemsList: GoogleMediaItem[] = unmatchedGoogleMediaItems[key];
+      for (const unmatchedGoogleMediaItem of unmatchedGoogleMediaItemsList) {
+        matchedTakeoutFiles = getTakeoutFileWithMatchingNameAndDate(
+          unmatchedGoogleMediaItem,
+          [],
+          takeoutFilesByCreateDate,
+          takeoutFilesByDateTimeOriginal,
+          takeoutFilesByModifyDate,
+        );
+        if (matchedTakeoutFiles.length === 0) {
+
+          // there is no takeout file with a date/time match
+    
+          // see if there is a no time zone date/time match
+          const matchedNoTimeZoneFiles = getTakeoutFilesWithMatchingNoTimeZoneDateTime(
+            unmatchedGoogleMediaItem,
+            takeoutFilesByCreateDateTimeOfDay,
+            takeoutFilesByDateTimeOriginalTimeOfDay,
+            takeoutFilesByModifyDateTimeOfDay,
+          );
+    
+          if (matchedNoTimeZoneFiles.length > 0) {
+
+            matchedGoogleMediaItems[unmatchedGoogleMediaItem.id] = {
+              // pick the first one - need to ensure that this will always work
+              takeoutFilePath: matchedNoTimeZoneFiles[0],
+              googleMediaItem: unmatchedGoogleMediaItem
+            };
+          } else {
+            stillUnmatchedGoogleMediaItems.push(unmatchedGoogleMediaItem);
+          }
+    
+        } else if (matchedTakeoutFiles.length === 1) {
+    
+          // single date match between a previous unmatched item and a takeout item
+          matchedGoogleMediaItems[unmatchedGoogleMediaItem.id] = {
+            takeoutFilePath: matchedTakeoutFiles[0],
+            googleMediaItem: unmatchedGoogleMediaItem
+          };
+    
+        } else {
+    
+          // check the order of the next two tests...
+    
+          // see if there is a no time zone date/time match
+          const matchedNoTimeZoneFiles = getTakeoutFilesWithMatchingNoTimeZoneDateTime(
+            unmatchedGoogleMediaItem,
+            takeoutFilesByCreateDateTimeOfDay,
+            takeoutFilesByDateTimeOriginalTimeOfDay,
+            takeoutFilesByModifyDateTimeOfDay,
+          );
+          if (matchedNoTimeZoneFiles.length > 0) {
+            matchedGoogleMediaItems[unmatchedGoogleMediaItem.id] = {
+              // pick the first one - need to ensure that this will always work
+              takeoutFilePath: matchedNoTimeZoneFiles[0],
+              googleMediaItem: unmatchedGoogleMediaItem
+            };
+          } else {
+    
+            // search for matching takeout item, based on exif tags
+            const matchedTakeoutFile: string = await getTagsMatch(unmatchedGoogleMediaItem, matchedTakeoutFiles);
+            if (matchedTakeoutFile !== '') {
+              matchedGoogleMediaItems[unmatchedGoogleMediaItem.id] = {
+                takeoutFilePath: matchedTakeoutFile,
+                googleMediaItem: unmatchedGoogleMediaItem
+              };
+            } else {
+              stillUnmatchedGoogleMediaItems.push(unmatchedGoogleMediaItem);
+            }
+          }
+        }
+      }
+    }
+  }
+
+  const results: any = {
+    matchedTakeoutFiles,
+    unmatchedGoogleMediaItems: stillUnmatchedGoogleMediaItems
+  };
+  return results;
+}
+
 const runMatchExperiments = async (authService: AuthService) => {
 
   const googleMediaItemsById: IdToGoogleMediaItems = await getJsonFromFile('/Users/tedshaffer/Documents/Projects/importFromTakeout/testResults/googleMediaItemsById.json');
   const takeoutFilesByFileName: IdToStringArray = await getJsonFromFile('/Users/tedshaffer/Documents/Projects/importFromTakeout/testResults/takeoutFilesByFileName.json');
 
-  const results: FirstPassResults = await matchGooglePhotosToTakeoutPhotos(googleMediaItemsById, takeoutFilesByFileName);
-  const { matchedGoogleMediaItems, unmatchedGoogleMediaItems, googleMediaItemsToMultipleTakeoutFiles } = results;
-  
-  console.log(results);
+  const firstPassResults: FirstPassResults = await matchGooglePhotosToTakeoutPhotos_1(googleMediaItemsById, takeoutFilesByFileName);
+  const { matchedGoogleMediaItems, unmatchedGoogleMediaItems, googleMediaItemsToMultipleTakeoutFiles } = firstPassResults;
+
+  const secondPassResults: any = await matchGooglePhotosToTakeoutPhotos_2(matchedGoogleMediaItems, unmatchedGoogleMediaItems);
+  const newMatchedGoogleMediaItems = secondPassResults.matchedTakeoutFiles;
+  const stillUnmatchedGoogleMediaItems = secondPassResults.unmatchedGoogleMediaItems;
+
+  console.log(firstPassResults);
   debugger;
 
   await matchUnmatchedFiles();
