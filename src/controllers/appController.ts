@@ -42,19 +42,24 @@ import {
 
 import { mediaItemsDir } from '../app';
 import { exifPropertyCount } from './exifUtils';
-import { findMe, findGPhotosByName, findGPhotosByNameStartsWith } from './dbInterface';
+import { findGPhotosByName } from './dbInterface';
 import { isNil, isNumber, isObject, isString } from 'lodash';
 import { AuthService } from '../auth';
-import { FSWatcher } from 'fs-extra';
 
 // maps photo id to list of file paths that matched it
 interface MatchedPhoto {
   imageFilePath: string;
   exactMatch: boolean;
 }
+
+type IdToGoogleMediaItem = {
+  [key: string]: GoogleMediaItem
+}
+
 type IdToGoogleMediaItems = {
   [key: string]: GoogleMediaItem[]
 }
+
 type IdToMatchedPhotoArray = {
   [key: string]: MatchedPhoto[]
 }
@@ -66,6 +71,14 @@ type IdToAnyArray = {
 }
 type IdToStringArray = {
   [key: string]: string[]
+}
+
+type IdToExifData = {
+  [key: string]: Tags[];
+}
+
+type IdToBools = {
+  [key: string]: boolean[];
 }
 
 type IdToTakeoutFilesByTimeOfDay = {
@@ -609,6 +622,8 @@ const matchGooglePhotosToTakeoutPhotos = async () => {
 
   let googleMediaItemIdsWithMoreThanOneGoogleMediaItem = 0;
 
+  // FIRST PASS
+
   for (const key in googleMediaItemsById) {
 
     if (Object.prototype.hasOwnProperty.call(googleMediaItemsById, key)) {
@@ -681,6 +696,8 @@ const matchGooglePhotosToTakeoutPhotos = async () => {
   }
 
   console.log('');
+  console.log('End of first pass')
+  console.log('');
   console.log(Object.keys(googleMediaItemsById).length, '\ttotal number of googleMediaItemsIds');
   // console.log(googleMediaItemIdsWithMoreThanOneGoogleMediaItem, '\tgoogleMediaItemIdsWithMoreThanOneGoogleMediaItem');
 
@@ -701,10 +718,6 @@ const matchGooglePhotosToTakeoutPhotos = async () => {
 
   let stillUnmatchedMediaItemsWithMoreThanOneMatchingFileName = 0;
   let stillUnmatchedMediaItemsWithNoMatchingFileNameCount = 0;
-  const stillUnmatchedMediaItemsWithNoMatchingFileName = [];
-  let numMultipleSlideScanMatches = 0;
-  let numSingleSlideScanMatches = 0;
-  let numNoSlideScanMatches = 0;
   let numToLowerCaseExtensionMatches = 0;
   let numToUpperCaseExtensionMatches = 0;
   let numMp4Files = 0;
@@ -712,8 +725,6 @@ const matchGooglePhotosToTakeoutPhotos = async () => {
   let numBmpFiles = 0;
   let numMpgFiles = 0;
   let numNefFiles = 0;
-  let numMangledFileNameUnderscoreMatches = 0;
-  let numFileNameStartWithSlideScan = 0;
 
   let truncatedFileNameMatchesCount = 0;
 
@@ -724,11 +735,10 @@ const matchGooglePhotosToTakeoutPhotos = async () => {
 
   let matchedTakeoutFiles: string[] = [];
   const stillUnmatchedGoogleMediaItems: GoogleMediaItem[] = [];
-  for (const unmatchedGoogleMediaItem of unmatchedGoogleMediaItems) {
 
-    // if (unmatchedGoogleMediaItem.id === 'AEEKk91iDAm4Yi89bt5v0zD22JZ5iAg-haPU-kNm2pFHrYVnRISEE1tvR-stgKh4syihiOJF9caqvMmnktaHOpdmwGiCQdGSIQ') {
-    //   debugger;
-    // }
+  // SECOND PASS
+
+  for (const unmatchedGoogleMediaItem of unmatchedGoogleMediaItems) {
 
     matchedTakeoutFiles = getTakeoutFileWithMatchingNameAndDate(
       unmatchedGoogleMediaItem,
@@ -824,6 +834,9 @@ const matchGooglePhotosToTakeoutPhotos = async () => {
   }
 
   console.log('');
+  console.log('End of second pass')
+
+  console.log('');
   console.log('Date matches for the remaining unmatched google media items.')
   console.log(unmatchedItemSingleDateMatch, '\tSingle date matches');
   console.log(unmatchedItemNoDateMatch, '\tNo date matches');
@@ -852,138 +865,102 @@ const matchGooglePhotosToTakeoutPhotos = async () => {
   console.log('');
   console.log(stillUnmatchedGoogleMediaItems.length, '\tstillUnmatchedGoogleMediaItems count');
 
+  const remainingUnmatchedGoogleMediaItems: GoogleMediaItem[] = [];
+  const remainingUnmatchedGoogleMediaItemsMultipleFileNameMatches: GoogleMediaItem[] = [];
+  const remainingUnmatchedGoogleMediaItemsNoFileNameMatches: GoogleMediaItem[] = [];
+  const unimportantUnmatchedGoogleMediaItems: GoogleMediaItem[] = [];
+
+  // THIRD PASS
+
   for (const stillUnmatchedGoogleMediaItem of stillUnmatchedGoogleMediaItems) {
     const fileName = stillUnmatchedGoogleMediaItem.filename;
     if (takeoutFilesByFileName.hasOwnProperty(fileName)) {
       const takeoutFilePaths: string[] = takeoutFilesByFileName[fileName];
       if (takeoutFilePaths.length > 1) {
         stillUnmatchedMediaItemsWithMoreThanOneMatchingFileName++;
+        remainingUnmatchedGoogleMediaItems.push(stillUnmatchedGoogleMediaItem);
+        remainingUnmatchedGoogleMediaItemsMultipleFileNameMatches.push(stillUnmatchedGoogleMediaItem);
+        // TEDTODO - there may be a way to still find a match
       } else {
         debugger;
       }
     } else {
 
       const lowerCaseExtension: string = path.extname(fileName).toLowerCase();
-      const upperCaseExtension: string = path.extname(fileName).toUpperCase();
 
       if (lowerCaseExtension === '.mov') {
         numMovFiles++;
+        unimportantUnmatchedGoogleMediaItems.push(stillUnmatchedGoogleMediaItem);
       } else if (lowerCaseExtension === '.mp4') {
         numMp4Files++;
+        unimportantUnmatchedGoogleMediaItems.push(stillUnmatchedGoogleMediaItem);
       } else if (lowerCaseExtension === '.bmp') {
         numBmpFiles++;
+        unimportantUnmatchedGoogleMediaItems.push(stillUnmatchedGoogleMediaItem);
       } else if (lowerCaseExtension === '.mpg') {
         numMpgFiles++;
+        unimportantUnmatchedGoogleMediaItems.push(stillUnmatchedGoogleMediaItem);
       } else if (lowerCaseExtension === '.nef') {
+        unimportantUnmatchedGoogleMediaItems.push(stillUnmatchedGoogleMediaItem);
         numNefFiles++;
+      } else if (fileName.includes('Scan')) {
+        unimportantUnmatchedGoogleMediaItems.push(stillUnmatchedGoogleMediaItem);
       } else {
-        if (fileName.startsWith('SlideScan')) {
-          numFileNameStartWithSlideScan++;
-          let truncateMatchFound = false;
-          const fileExtension: string = path.extname(fileName);
-          let fileNameLength = fileName.length;
-          while (fileNameLength > (9 + fileExtension.length)) {
-            const truncatedFileName = fileName.substring(0, fileNameLength - fileExtension.length) + fileExtension;
-            if (takeoutFilesByFileName.hasOwnProperty(truncatedFileName)) {
-              const takeoutFilePaths: string[] = takeoutFilesByFileName[truncatedFileName];
-              if (takeoutFilePaths.length === 1) {
-                numSingleSlideScanMatches++;
-                truncateMatchFound = true;
-                break;
-              } else if (takeoutFilePaths.length > 1) {
-                numMultipleSlideScanMatches++;
-                truncateMatchFound = true;
-                break;
-              }
-            }
-            fileNameLength--;
+        const truncatedFileNameMatches: string[] = getTruncatedFileNameMatches(takeoutFilesByFileName, fileName);
+
+        if (truncatedFileNameMatches.length > 0) {
+
+          if (matchedGoogleMediaItems.hasOwnProperty(stillUnmatchedGoogleMediaItem.id)) {
+            duplicateGoogleIdsFound++;
           }
-          if (!truncateMatchFound) {
-            numNoSlideScanMatches++;
-            // console.log(fileName + '\tNo slide name match found');
-          }
+          matchedGoogleMediaItems[stillUnmatchedGoogleMediaItem.id] = {
+            takeoutFilePath: truncatedFileNameMatches[0],
+            googleMediaItem: stillUnmatchedGoogleMediaItem
+          };
+
+          truncatedFileNameMatchesCount++;
+
+          // my guess is that this can occur in the following cases
+          //    multiple copies of the same file in takeoutFiles
+          //    the file name length was short enough that there were multiple matches
+          // if (truncatedFileNameMatches.length > 1) {
+          //   debugger;
+          // }
+
         } else {
-          const lastIndexOfUnderscore = fileName.lastIndexOf('_');
-          const fnweLc = path.basename(fileName, lowerCaseExtension);
-          const fnweUc = path.basename(fileName, upperCaseExtension);
-          const fileNameWithoutExtension = fnweLc.length < fnweUc.length ? fnweLc : fnweUc;
-
-          if (lastIndexOfUnderscore >= 4) {
-            const mangledFilename = fileName.substring(0, lastIndexOfUnderscore + 1)
-            if (takeoutFilesByFileName.hasOwnProperty(mangledFilename + lowerCaseExtension)) {
-              numMangledFileNameUnderscoreMatches++;
-            } else if (takeoutFilesByFileName.hasOwnProperty(mangledFilename + upperCaseExtension)) {
-              numMangledFileNameUnderscoreMatches++;
-            } else {
-
-              if (takeoutFilesByFileName.hasOwnProperty(fileNameWithoutExtension + lowerCaseExtension)) {
-                numToLowerCaseExtensionMatches++;
-              }
-              else if (takeoutFilesByFileName.hasOwnProperty(fileNameWithoutExtension + upperCaseExtension)) {
-                numToUpperCaseExtensionMatches++;
-              } else {
-                stillUnmatchedMediaItemsWithNoMatchingFileNameCount++;
-                stillUnmatchedMediaItemsWithNoMatchingFileName.push(stillUnmatchedGoogleMediaItem);
-
-                const truncatedFileNameMatches: string[] = getTruncatedFileNameMatches(takeoutFilesByFileName, fileName);
-                if (truncatedFileNameMatches.length > 0) {
-                  // console.log('truncatedFileNameMatch: ', fileName);
-                  // console.log(truncatedFileNameMatches);
-                  truncatedFileNameMatchesCount++;
-                }
-                // if (truncatedFileNameMatches.length > 1) {
-                //   debugger;
-                // }
-              }
-            }
-          } else {
-            const fileNameWithUpperCaseExtension = fileNameWithoutExtension + upperCaseExtension;
-            if (takeoutFilesByFileName.hasOwnProperty(fileNameWithUpperCaseExtension)) {
-              if (takeoutFilesByFileName[fileNameWithUpperCaseExtension].length == 1) {
-                singleFileNameWithUpperCaseExtensionMatchCount++;
-              } else {
-                multipleFileNameWithUpperCaseExtensionMatchCount++;
-              }
-            } else {
-              stillUnmatchedMediaItemsWithNoMatchingFileNameCount++;
-              stillUnmatchedMediaItemsWithNoMatchingFileName.push(stillUnmatchedGoogleMediaItem);
-
-              const truncatedFileNameMatches: string[] = getTruncatedFileNameMatches(takeoutFilesByFileName, fileName);
-              if (truncatedFileNameMatches.length > 0) {
-                // console.log('truncatedFileNameMatch: ', fileName);
-                // console.log(truncatedFileNameMatches);
-                truncatedFileNameMatchesCount++;
-              }
-              // if (truncatedFileNameMatches.length > 1) {
-              //   debugger;
-              // }
-            }
-
-          }
+          stillUnmatchedMediaItemsWithNoMatchingFileNameCount++;
+          remainingUnmatchedGoogleMediaItems.push(stillUnmatchedGoogleMediaItem);
+          remainingUnmatchedGoogleMediaItemsNoFileNameMatches.push(stillUnmatchedGoogleMediaItem);
         }
       }
     }
   }
+
+  console.log('');
+  console.log('End of third pass')
+
+  console.log('');
+  console.log('unimportantUnmatchedGoogleMediaItems count');
+  console.log(unimportantUnmatchedGoogleMediaItems.length);
+  console.log('remainingUnmatchedGoogleMediaItems count');
+  console.log(remainingUnmatchedGoogleMediaItems.length);
+
+  console.log('remainingUnmatchedGoogleMediaItemsMultipleFileNameMatches');
+  console.log(remainingUnmatchedGoogleMediaItemsMultipleFileNameMatches);
+  console.log('remainingUnmatchedGoogleMediaItemsNoFileNameMatches');
+  console.log(remainingUnmatchedGoogleMediaItemsNoFileNameMatches);
 
   console.log('stillUnmatchedMediaItemsWithMoreThanOneMatchingFileName');
   console.log(stillUnmatchedMediaItemsWithMoreThanOneMatchingFileName);
 
   console.log('stillUnmatchedMediaItemsWithNoMatchingFileNameCount');
   console.log(stillUnmatchedMediaItemsWithNoMatchingFileNameCount);
-  console.log('numFileNameStartWithSlideScan');
-  console.log(numFileNameStartWithSlideScan);
+
+  console.log('');
 
   console.log('truncatedFileNameMatchesCount');
   console.log(truncatedFileNameMatchesCount);
 
-  console.log('numSingleSlideScanMatches');
-  console.log(numSingleSlideScanMatches);
-  console.log('numMultipleSlideScanMatches');
-  console.log(numMultipleSlideScanMatches);
-  console.log('numNoSlideScanMatches');
-  console.log(numNoSlideScanMatches);
-  console.log('numMangledFileNameUnderscoreMatches');
-  console.log(numMangledFileNameUnderscoreMatches);
   console.log('numToLowerCaseExtensionMatches');
   console.log(numToLowerCaseExtensionMatches);
   console.log('numToUpperCaseExtensionMatches');
@@ -1005,18 +982,25 @@ const matchGooglePhotosToTakeoutPhotos = async () => {
   console.log(multipleFileNameWithUpperCaseExtensionMatchCount);
 
   console.log('matchedGoogleMediaItems');
-  console.log(matchedGoogleMediaItems);
+  console.log(matchedGoogleMediaItems.length);
 
-  // count the number of unmatched items that include the substring 'scan'
-  let numberOfUnmatchedGoogleMediaItemsWithScanInTheName = 0;
-  for (const stillUnmatchedGoogleMediaItem of stillUnmatchedGoogleMediaItems) {
-    if (stillUnmatchedGoogleMediaItem.filename.includes('Scan')) {
-      numberOfUnmatchedGoogleMediaItemsWithScanInTheName++;
-    }
-  }
+  // const remainingUnmatchedGoogleMediaItemsNoFileNameMatchesStream: any = openWriteStream('/Users/tedshaffer/Documents/Projects/importFromTakeout/testResults/remainingUnmatchedGoogleMediaItemsNoFileNameMatches.json');
+  // const t: any = { items: remainingUnmatchedGoogleMediaItemsNoFileNameMatches };
+  // const remainingUnmatchedGoogleMediaItemsNoFileNameMatchesAsStr = JSON.stringify(t);
+  // writeToWriteStream(remainingUnmatchedGoogleMediaItemsNoFileNameMatchesStream, remainingUnmatchedGoogleMediaItemsNoFileNameMatchesAsStr);
+  // closeStream(remainingUnmatchedGoogleMediaItemsNoFileNameMatchesStream);
 
-  console.log('numberOfUnmatchedGoogleMediaItemsWithScanInTheName');
-  console.log(numberOfUnmatchedGoogleMediaItemsWithScanInTheName);
+  // const remainingUnmatchedGoogleMediaItemsMultipleFileNameMatchesStream: any = openWriteStream('/Users/tedshaffer/Documents/Projects/importFromTakeout/testResults/remainingUnmatchedGoogleMediaItemsMultipleFileNameMatches.json');
+  // const t: any = { items: remainingUnmatchedGoogleMediaItemsMultipleFileNameMatches };
+  // const remainingUnmatchedGoogleMediaItemsMultipleFileNameMatchesAsStr = JSON.stringify(t);
+  // writeToWriteStream(remainingUnmatchedGoogleMediaItemsMultipleFileNameMatchesStream, remainingUnmatchedGoogleMediaItemsMultipleFileNameMatchesAsStr);
+  // closeStream(remainingUnmatchedGoogleMediaItemsMultipleFileNameMatchesStream);
+
+  // const unimportantUnmatchedGoogleMediaItemsStream: any = openWriteStream('/Users/tedshaffer/Documents/Projects/importFromTakeout/testResults/unimportantUnmatchedGoogleMediaItems.json');
+  // const y: any = { items: unimportantUnmatchedGoogleMediaItems };
+  // const unimportantUnmatchedGoogleMediaItemsAsStr = JSON.stringify(y);
+  // writeToWriteStream(unimportantUnmatchedGoogleMediaItemsStream, unimportantUnmatchedGoogleMediaItemsAsStr);
+  // closeStream(unimportantUnmatchedGoogleMediaItemsStream);
 
   debugger;
 
@@ -1294,7 +1278,184 @@ const getTakeoutFilesMatchingGoogleDate = (
   return [];
 }
 
+const getExifDataByGoogleIdForGoogleMediaItemsWithMultipleFileNameMatchesAndGpsData = async () => {
+
+  const exifDataWithGPSByGoogleId: IdToExifData = {};
+  const hasDateTimeWithGPSByGoogleId: IdToBools = {};
+
+  const googleMediaItemsWhereAtLeastOneTakeoutFileHasGps: IdToGoogleMediaItem = await getJsonFromFile('/Users/tedshaffer/Documents/Projects/importFromTakeout/testResults/googleMediaItemsWhereAtLeastOneTakeoutFileHasGps.json');
+  const takeoutFilesByFileName: IdToStringArray = await getJsonFromFile('/Users/tedshaffer/Documents/Projects/importFromTakeout/testResults/takeoutFilesByFileName.json');
+
+  for (const key in googleMediaItemsWhereAtLeastOneTakeoutFileHasGps) {
+    if (Object.prototype.hasOwnProperty.call(googleMediaItemsWhereAtLeastOneTakeoutFileHasGps, key)) {
+      const googleMediaItem: GoogleMediaItem = googleMediaItemsWhereAtLeastOneTakeoutFileHasGps[key];
+      if (takeoutFilesByFileName.hasOwnProperty(googleMediaItem.filename)) {
+        const takeoutFilePaths: string[] = takeoutFilesByFileName[googleMediaItem.filename];
+        for (const takeoutFilePath of takeoutFilePaths) {
+          const exifData: Tags = await getExifData(takeoutFilePath);
+          if (!isNil(exifData.GPSLatitude)) {
+            if (!exifDataWithGPSByGoogleId.hasOwnProperty(googleMediaItem.id)) {
+              exifDataWithGPSByGoogleId[googleMediaItem.id] = [];
+            }
+            exifDataWithGPSByGoogleId[googleMediaItem.id].push(exifData);
+
+            const hasDateTime: boolean = !isNil(exifData.CreateDate) || !isNil(exifData.DateTimeOriginal) || !isNil(exifData.ModifyDate);
+
+            if (!hasDateTimeWithGPSByGoogleId.hasOwnProperty(googleMediaItem.id)) {
+              hasDateTimeWithGPSByGoogleId[googleMediaItem.id] = [];
+            }
+            hasDateTimeWithGPSByGoogleId[googleMediaItem.id].push(hasDateTime);
+
+          }
+        }
+      }
+      else {
+        debugger;
+      }
+    }
+  }
+
+  console.log(exifDataWithGPSByGoogleId);
+
+  debugger;
+}
+
+const matchUnmatchedFiles = async () => {
+
+  const remainingUnmatchedGoogleMediaItemsNoFileNameMatchesAny: any = await getJsonFromFile('/Users/tedshaffer/Documents/Projects/importFromTakeout/testResults/remainingUnmatchedGoogleMediaItemsNoFileNameMatches.json');
+  const remainingUnmatchedGoogleMediaItemsNoFileNameMatches: GoogleMediaItem[] = remainingUnmatchedGoogleMediaItemsNoFileNameMatchesAny.items;
+  const takeoutFilesByFileName: IdToStringArray = await getJsonFromFile('/Users/tedshaffer/Documents/Projects/importFromTakeout/testResults/takeoutFilesByFileName.json');
+
+  for (const googleMediaItem of remainingUnmatchedGoogleMediaItemsNoFileNameMatches) {
+    const fileName = googleMediaItem.filename;
+    const fileExtension: string = path.extname(fileName);
+
+    const filePathWithoutExtension = fileName.split('.').slice(0, -1).join('.');
+
+    const filePathWithUpperCaseExtension = filePathWithoutExtension + fileExtension.toUpperCase();
+    if (takeoutFilesByFileName.hasOwnProperty(filePathWithUpperCaseExtension)) {
+      debugger;
+    }
+    const filePathWithLowerCaseExtension = filePathWithoutExtension + fileExtension.toLowerCase();
+    if (takeoutFilesByFileName.hasOwnProperty(filePathWithLowerCaseExtension)) {
+      debugger;
+    }
+  }
+
+  debugger;
+}
+
+const searchForGpsDataInMultipleFileNameMatches = async () => {
+
+  const remainingUnmatchedGoogleMediaItemsMultipleFileNameMatchesAny: any = await getJsonFromFile('/Users/tedshaffer/Documents/Projects/importFromTakeout/testResults/remainingUnmatchedGoogleMediaItemsMultipleFileNameMatches.json');
+  const remainingUnmatchedGoogleMediaItemsMultipleFileNameMatches: GoogleMediaItem[] = remainingUnmatchedGoogleMediaItemsMultipleFileNameMatchesAny.items;
+  const takeoutFilesByFileName: IdToStringArray = await getJsonFromFile('/Users/tedshaffer/Documents/Projects/importFromTakeout/testResults/takeoutFilesByFileName.json');
+
+  let fileCount = 0;
+  let filesWithGPSAndDateData = 0;
+  let filesWithGPSButNoDateCount = 0;
+  const googleItemsWithGPSButNoDateFile: GoogleMediaItem[] = [];
+  const filesWithGPSButNoDate: string[] = [];
+  const googleItemsWithOnlyOneThatHasNoDateTime: GoogleMediaItem[] = [];
+  const filesThatAreOnlyOneWithNoDateTime: string[] = [];
+  const filesWithNoDateTimeHaveGPS: boolean[] = [];
+  let filesWithNoDateTimeHaveGPSCount = 0;
+  let fileWithNoDateTime;
+
+  let filesWithNoDateTimeCount = 0;
+  let filesWithMultipleDateTimeCount = 0;
+  let filesWithZeroDateTimeCount = 0;
+
+  let atLeastOneTakeoutFileHasGpsForGoogleMediaItemCount = 0;
+  const googleMediaItemsWhereAtLeastOneTakeoutFileHasGps: any = {};
+
+  for (const googleMediaItem of remainingUnmatchedGoogleMediaItemsMultipleFileNameMatches) {
+    const takeoutFilesWithSameFileName = takeoutFilesByFileName[googleMediaItem.filename];
+    let filesWithNoDateTime = 0;
+    let fileWithNoDateTimeHasGPS = false;
+    let oneOfTakeoutFilesHasGps = false;
+    for (const takeoutFilePath of takeoutFilesWithSameFileName) {
+      const exifData: Tags = await getExifData(takeoutFilePath);
+      if (!isNil(exifData.GPSLatitude)) {
+        oneOfTakeoutFilesHasGps = true;
+      }
+      if (isNil(exifData.CreateDate) && isNil(exifData.DateTimeOriginal) && isNil(exifData.ModifyDate)) {
+        filesWithNoDateTime++;
+        fileWithNoDateTimeHasGPS = !isNil(exifData.GPSLatitude);
+        fileWithNoDateTime = takeoutFilePath;
+        if (!isNil(exifData.GPSLatitude)) {
+          googleItemsWithGPSButNoDateFile.push(googleMediaItem);
+          filesWithGPSButNoDate.push(takeoutFilePath);
+          filesWithGPSButNoDateCount++;
+        }
+      } else if (!isNil(exifData.GPSLatitude)) {
+        filesWithGPSAndDateData++;
+      }
+    }
+    if (filesWithNoDateTime === 1) {
+      googleItemsWithOnlyOneThatHasNoDateTime.push(googleMediaItem);
+      filesThatAreOnlyOneWithNoDateTime.push(fileWithNoDateTime);
+      filesWithNoDateTimeHaveGPS.push(fileWithNoDateTimeHasGPS);
+      if (fileWithNoDateTimeHasGPS) {
+        filesWithNoDateTimeHaveGPSCount++;
+      }
+      filesWithNoDateTimeCount++;
+    } else if (filesWithNoDateTime === 0) {
+      filesWithZeroDateTimeCount++;
+    } else {
+      filesWithMultipleDateTimeCount++;
+    }
+
+
+    if (oneOfTakeoutFilesHasGps) {
+      atLeastOneTakeoutFileHasGpsForGoogleMediaItemCount++;
+      googleMediaItemsWhereAtLeastOneTakeoutFileHasGps[googleMediaItem.id] = googleMediaItem;
+    }
+
+    fileCount++;
+    if ((fileCount % 100) === 0) {
+      console.log(fileCount);
+      console.log(filesWithGPSButNoDateCount);
+      console.log(filesWithGPSAndDateData);
+    }
+  }
+
+  const googleMediaItemsWhereAtLeastOneTakeoutFileHasGpsStream: any = openWriteStream('/Users/tedshaffer/Documents/Projects/importFromTakeout/testResults/googleMediaItemsWhereAtLeastOneTakeoutFileHasGps.json');
+  const googleMediaItemsWhereAtLeastOneTakeoutFileHasGpsAsStr = JSON.stringify(googleMediaItemsWhereAtLeastOneTakeoutFileHasGps);
+  writeToWriteStream(googleMediaItemsWhereAtLeastOneTakeoutFileHasGpsStream, googleMediaItemsWhereAtLeastOneTakeoutFileHasGpsAsStr);
+  closeStream(googleMediaItemsWhereAtLeastOneTakeoutFileHasGpsStream);
+
+  console.log(fileCount);
+  console.log(filesWithGPSButNoDateCount);
+  console.log(filesWithGPSAndDateData);
+  console.log(googleItemsWithGPSButNoDateFile);
+  console.log(filesWithGPSButNoDate);
+
+  console.log(googleItemsWithOnlyOneThatHasNoDateTime);
+  console.log(filesThatAreOnlyOneWithNoDateTime);
+  console.log(filesWithNoDateTimeHaveGPS);
+  console.log(filesWithNoDateTimeHaveGPSCount);
+
+  console.log(filesWithNoDateTimeCount);
+  console.log(filesWithMultipleDateTimeCount);
+  console.log(filesWithZeroDateTimeCount);
+
+  console.log(atLeastOneTakeoutFileHasGpsForGoogleMediaItemCount);
+
+
+  debugger;
+}
+
 const runMatchExperiments = async (authService: AuthService) => {
+
+  await matchUnmatchedFiles();
+  debugger;
+
+  await getExifDataByGoogleIdForGoogleMediaItemsWithMultipleFileNameMatchesAndGpsData();
+  debugger;
+
+  // await searchForGpsDataInMultipleFileNameMatches();
+  // debugger;
 
   // await buildTakeoutFilesByTimeOfDay();
   // debugger;
