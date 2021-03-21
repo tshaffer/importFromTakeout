@@ -161,7 +161,7 @@ const matchTags = (googleMediaItem: GoogleMediaItem, exifData: Tags): boolean =>
   return true;
 }
 
-const retrieveExifData = async(filePath: string): Promise<any> => {
+const retrieveExifData = async (filePath: string): Promise<any> => {
   let exifData: Tags;
   if (filePathsToExifTags.hasOwnProperty(filePath)) {
     exifData = filePathsToExifTags[filePath];
@@ -315,13 +315,17 @@ const getTakeoutFilesMatchingGoogleDate = (
 const trimUnusedMediaItems = async (googleMediaItemsById: IdToGoogleMediaItems,
 ) => {
   for (const key in googleMediaItemsById) {
+    // if (key === 'AEEKk92aqchw06fDGOxgL2d23eVwn6CxQtCAlR0qM0KmRMZcy-pJLdX84-tR3r8AHT3lBuh-_YKzeeLPeRRXptJyjd0_eQs4Ww') {
+    //   debugger;
+    // }
     if (Object.prototype.hasOwnProperty.call(googleMediaItemsById, key)) {
       const googleMediaItems: GoogleMediaItem[] = googleMediaItemsById[key];
       let index = 0;
       const indicesToRemove: number[] = [];
       for (const googleMediaItem of googleMediaItems) {
         const fileName = googleMediaItem.filename;
-        if (unusedExtension.some(substring => fileName.includes(substring))) {
+        const lowerCaseExtension: string = path.extname(fileName).toLowerCase();
+        if (unusedExtension.some(substring => lowerCaseExtension.includes(substring))) {
           indicesToRemove.push(index);
         } else if (fileName.includes('Scan')) {
           indicesToRemove.push(index);
@@ -524,7 +528,7 @@ const matchGooglePhotosToTakeoutPhotos_3 = async (
   return results;
 }
 
-const matchGooglePhotosToTakeoutPhotos_4 = async(
+const matchGooglePhotosToTakeoutPhotos_4 = async (
   takeoutFilesByFileName: IdToStringArray,
   remainingUnmatchedGoogleMediaItemsMultipleFileNameMatches: GoogleMediaItem[],
 ): Promise<IdToGoogleMediaItem> => {
@@ -592,7 +596,7 @@ const matchGooglePhotosToTakeoutPhotos_4 = async(
   return googleMediaItemsWhereAtLeastOneTakeoutFileHasGps;
 }
 
-const matchGooglePhotosToTakeoutPhotos_5 = async(
+const matchGooglePhotosToTakeoutPhotos_5 = async (
   takeoutFilesByFileName: IdToStringArray,
   matchedGoogleMediaItems: IdToMatchedGoogleMediaItem,
   googleMediaItemsWhereAtLeastOneTakeoutFileHasGps: IdToGoogleMediaItem,
@@ -698,9 +702,9 @@ const matchGooglePhotosToTakeoutFiles = async () => {
   console.log(Object.keys(matchedGoogleMediaItems).length + '\tMatched google media items')
   console.log(remainingUnmatchedGoogleMediaItemsNoFileNameMatches.length, '\tremainingUnmatchedGoogleMediaItemsNoFileNameMatches');
   console.log(remainingUnmatchedGoogleMediaItemsMultipleFileNameMatches.length, '\tremainingUnmatchedGoogleMediaItemsMultipleFileNameMatches');
-  
+
   const googleMediaItemsWhereAtLeastOneTakeoutFileHasGps: IdToGoogleMediaItem = await matchGooglePhotosToTakeoutPhotos_4(takeoutFilesByFileName, thirdPassResults.remainingUnmatchedGoogleMediaItemsMultipleFileNameMatches);
-  
+
   await matchGooglePhotosToTakeoutPhotos_5(takeoutFilesByFileName, matchedGoogleMediaItems, googleMediaItemsWhereAtLeastOneTakeoutFileHasGps);
   console.log('');
   console.log('Match to files with GPS data');
@@ -710,8 +714,18 @@ const matchGooglePhotosToTakeoutFiles = async () => {
   console.log('');
   console.log('Match to files with mismatched file extensions');
   console.log(Object.keys(matchedGoogleMediaItems).length + '\tMatched google media items')
-  // console.log('sixthPassResults');
-  // console.log(Object.keys(matchedGoogleMediaItems).length);
-  debugger;
 
+  const remainingUnmatchedGoogleMediaItemsNoFileNameMatchesStream: any = openWriteStream('/Users/tedshaffer/Documents/Projects/importFromTakeout/testResults/remainingUnmatchedGoogleMediaItemsNoFileNameMatches.json');
+  const t: any = { items: remainingUnmatchedGoogleMediaItemsNoFileNameMatches };
+  const remainingUnmatchedGoogleMediaItemsNoFileNameMatchesAsStr = JSON.stringify(t);
+  writeToWriteStream(remainingUnmatchedGoogleMediaItemsNoFileNameMatchesStream, remainingUnmatchedGoogleMediaItemsNoFileNameMatchesAsStr);
+  closeStream(remainingUnmatchedGoogleMediaItemsNoFileNameMatchesStream);
+
+  const remainingUnmatchedGoogleMediaItemsMultipleFileNameMatchesStream: any = openWriteStream('/Users/tedshaffer/Documents/Projects/importFromTakeout/testResults/remainingUnmatchedGoogleMediaItemsMultipleFileNameMatches.json');
+  const t2: any = { items: remainingUnmatchedGoogleMediaItemsMultipleFileNameMatches };
+  const remainingUnmatchedGoogleMediaItemsMultipleFileNameMatchesAsStr = JSON.stringify(t2);
+  writeToWriteStream(remainingUnmatchedGoogleMediaItemsMultipleFileNameMatchesStream, remainingUnmatchedGoogleMediaItemsMultipleFileNameMatchesAsStr);
+  closeStream(remainingUnmatchedGoogleMediaItemsMultipleFileNameMatchesStream);
+
+  console.log('write complete');
 }
