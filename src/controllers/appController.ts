@@ -63,8 +63,12 @@ interface FirstPassResults {
 }
 
 interface SecondPassResults {
-  matchedGoogleMediaItems: IdToMatchedGoogleMediaItem;
   unmatchedGoogleMediaItems: GoogleMediaItem[];
+}
+
+interface ThirdPassResults {
+  remainingUnmatchedGoogleMediaItemsNoFileNameMatches: GoogleMediaItem[];
+  remainingUnmatchedGoogleMediaItemsMultipleFileNameMatches: GoogleMediaItem[];
 }
 
 type IdToGoogleMediaItem = {
@@ -590,7 +594,7 @@ const getTagsMatch = async (googleMediaItem: GoogleMediaItem, takeoutFiles: stri
     } else {
       exifData = await getExifData(takeoutFile);
       filePathsToExifTags[takeoutFile] = exifData;
-    } 
+    }
     if (matchTags(googleMediaItem, exifData)) {
       return takeoutFile;
     }
@@ -1630,7 +1634,6 @@ const matchGooglePhotosToTakeoutPhotos_2 = async (
   }
 
   const results: SecondPassResults = {
-    matchedGoogleMediaItems,
     unmatchedGoogleMediaItems: stillUnmatchedGoogleMediaItems
   };
   return results;
@@ -1639,13 +1642,11 @@ const matchGooglePhotosToTakeoutPhotos_2 = async (
 const matchGooglePhotosToTakeoutPhotos_3 = async (
   takeoutFilesByFileName: IdToStringArray,
   matchedGoogleMediaItems: IdToMatchedGoogleMediaItem,
-  stillUnmatchedGoogleMediaItems: GoogleMediaItem[]) => {
+  stillUnmatchedGoogleMediaItems: GoogleMediaItem[]): Promise<ThirdPassResults> => {
 
   const remainingUnmatchedGoogleMediaItems: GoogleMediaItem[] = [];
   const remainingUnmatchedGoogleMediaItemsMultipleFileNameMatches: GoogleMediaItem[] = [];
   const remainingUnmatchedGoogleMediaItemsNoFileNameMatches: GoogleMediaItem[] = [];
-  const unimportantUnmatchedGoogleMediaItems: GoogleMediaItem[] = [];
-
 
   for (const stillUnmatchedGoogleMediaItem of stillUnmatchedGoogleMediaItems) {
     const fileName = stillUnmatchedGoogleMediaItem.filename;
@@ -1658,40 +1659,22 @@ const matchGooglePhotosToTakeoutPhotos_3 = async (
         debugger;
       }
     } else {
-
-      const lowerCaseExtension: string = path.extname(fileName).toLowerCase();
-
-      if (lowerCaseExtension === '.mov') {
-        unimportantUnmatchedGoogleMediaItems.push(stillUnmatchedGoogleMediaItem);
-      } else if (lowerCaseExtension === '.mp4') {
-        unimportantUnmatchedGoogleMediaItems.push(stillUnmatchedGoogleMediaItem);
-      } else if (lowerCaseExtension === '.bmp') {
-        unimportantUnmatchedGoogleMediaItems.push(stillUnmatchedGoogleMediaItem);
-      } else if (lowerCaseExtension === '.mpg') {
-        unimportantUnmatchedGoogleMediaItems.push(stillUnmatchedGoogleMediaItem);
-      } else if (lowerCaseExtension === '.nef') {
-        unimportantUnmatchedGoogleMediaItems.push(stillUnmatchedGoogleMediaItem);
-      } else if (fileName.includes('Scan')) {
-        unimportantUnmatchedGoogleMediaItems.push(stillUnmatchedGoogleMediaItem);
+      const truncatedFileNameMatches: string[] = getTruncatedFileNameMatches(takeoutFilesByFileName, fileName);
+      if (truncatedFileNameMatches.length > 0) {
+        matchedGoogleMediaItems[stillUnmatchedGoogleMediaItem.id] = {
+          takeoutFilePath: truncatedFileNameMatches[0],
+          googleMediaItem: stillUnmatchedGoogleMediaItem
+        };
       } else {
-        const truncatedFileNameMatches: string[] = getTruncatedFileNameMatches(takeoutFilesByFileName, fileName);
-        if (truncatedFileNameMatches.length > 0) {
-          matchedGoogleMediaItems[stillUnmatchedGoogleMediaItem.id] = {
-            takeoutFilePath: truncatedFileNameMatches[0],
-            googleMediaItem: stillUnmatchedGoogleMediaItem
-          };
-        } else {
-          remainingUnmatchedGoogleMediaItems.push(stillUnmatchedGoogleMediaItem);
-          remainingUnmatchedGoogleMediaItemsNoFileNameMatches.push(stillUnmatchedGoogleMediaItem);
-        }
+        remainingUnmatchedGoogleMediaItems.push(stillUnmatchedGoogleMediaItem);
+        remainingUnmatchedGoogleMediaItemsNoFileNameMatches.push(stillUnmatchedGoogleMediaItem);
       }
     }
   }
 
-  const results: any = {
+  const results: ThirdPassResults = {
     remainingUnmatchedGoogleMediaItemsNoFileNameMatches,
     remainingUnmatchedGoogleMediaItemsMultipleFileNameMatches,
-    unimportantUnmatchedGoogleMediaItems
   };
 
   return results;
@@ -1728,16 +1711,15 @@ const runMatchExperiments = async (authService: AuthService) => {
   console.log(Object.keys(googleMediaItemsToMultipleTakeoutFiles).length);
 
   const secondPassResults: SecondPassResults = await matchGooglePhotosToTakeoutPhotos_2(matchedGoogleMediaItems, unmatchedGoogleMediaItems);
-  const newMatchedGoogleMediaItems = secondPassResults.matchedGoogleMediaItems;
   const stillUnmatchedGoogleMediaItems = secondPassResults.unmatchedGoogleMediaItems;
 
   console.log('secondPassResults');
   console.log(Object.keys(matchedGoogleMediaItems).length);
-  console.log(Object.keys(newMatchedGoogleMediaItems).length);
   console.log(stillUnmatchedGoogleMediaItems.length);
-  debugger;
 
-  const thirdPassResults: any = await matchGooglePhotosToTakeoutPhotos_3(takeoutFilesByFileName, newMatchedGoogleMediaItems, stillUnmatchedGoogleMediaItems);
+  const thirdPassResults: any = await matchGooglePhotosToTakeoutPhotos_3(takeoutFilesByFileName, matchedGoogleMediaItems, stillUnmatchedGoogleMediaItems);
+  console.log('thirdPassResults');
+  console.log(thirdPassResults);
   debugger;
 
   await matchUnmatchedFiles();
