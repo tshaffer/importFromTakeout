@@ -52,10 +52,19 @@ interface MatchedPhoto {
   exactMatch: boolean;
 }
 
+interface FilePathToExifTags {
+  [key: string]: Tags;
+}
+
 interface FirstPassResults {
   matchedGoogleMediaItems: IdToMatchedGoogleMediaItem;
   unmatchedGoogleMediaItems: IdToGoogleMediaItems;
   googleMediaItemsToMultipleTakeoutFiles: IdToStringArray;
+}
+
+interface SecondPassResults {
+  matchedGoogleMediaItems: IdToMatchedGoogleMediaItem;
+  unmatchedGoogleMediaItems: GoogleMediaItem[];
 }
 
 type IdToGoogleMediaItem = {
@@ -571,10 +580,17 @@ const matchTags = (googleMediaItem: GoogleMediaItem, exifData: Tags): boolean =>
   return true;
 }
 
+
 const getTagsMatch = async (googleMediaItem: GoogleMediaItem, takeoutFiles: string[]): Promise<string> => {
 
   for (const takeoutFile of takeoutFiles) {
-    const exifData: Tags = await getExifData(takeoutFile);
+    let exifData: Tags;
+    if (filePathsToExifTags.hasOwnProperty(takeoutFile)) {
+      exifData = filePathsToExifTags[takeoutFile];
+    } else {
+      exifData = await getExifData(takeoutFile);
+      filePathsToExifTags[takeoutFile] = exifData;
+    } 
     if (matchTags(googleMediaItem, exifData)) {
       return takeoutFile;
     }
@@ -1451,6 +1467,38 @@ const searchForGpsDataInMultipleFileNameMatches = async () => {
   debugger;
 }
 
+const unusedExtension: string[] = ['.mov', '.mp4', '.bmp', '.mpg', '.nef'];
+
+const trimUnimportantMediaItems = async (googleMediaItemsById: IdToGoogleMediaItems,
+) => {
+  for (const key in googleMediaItemsById) {
+    if (Object.prototype.hasOwnProperty.call(googleMediaItemsById, key)) {
+      const googleMediaItems: GoogleMediaItem[] = googleMediaItemsById[key];
+      let index = 0;
+      const indicesToRemove: number[] = [];
+      for (const googleMediaItem of googleMediaItems) {
+        const fileName = googleMediaItem.filename;
+        if (unusedExtension.some(substring => fileName.includes(substring))) {
+          indicesToRemove.push(index);
+        } else if (fileName.includes('Scan')) {
+          indicesToRemove.push(index);
+        }
+        index++;
+      }
+      if (indicesToRemove.length > 0) {
+        let indexOfItemToRemove = indicesToRemove.length - 1;
+        while (indexOfItemToRemove >= 0) {
+          googleMediaItems.splice(indexOfItemToRemove, 1)
+          indexOfItemToRemove--;
+        }
+        if (googleMediaItems.length === 0) {
+          delete googleMediaItemsById[key];
+        }
+      }
+    }
+  }
+}
+
 const matchGooglePhotosToTakeoutPhotos_1 = async (
   googleMediaItemsById: IdToGoogleMediaItems,
   takeoutFilesByFileName: IdToStringArray)
@@ -1491,7 +1539,7 @@ const matchGooglePhotosToTakeoutPhotos_1 = async (
 
 const matchGooglePhotosToTakeoutPhotos_2 = async (
   matchedGoogleMediaItems: IdToMatchedGoogleMediaItem,
-  unmatchedGoogleMediaItems: IdToGoogleMediaItems) => {
+  unmatchedGoogleMediaItems: IdToGoogleMediaItems): Promise<SecondPassResults> => {
 
   const takeoutFilesByCreateDate: IdToStringArray = await getJsonFromFile('/Users/tedshaffer/Documents/Projects/importFromTakeout/testResults/takeoutFilesByCreateDate.json');
   const takeoutFilesByDateTimeOriginal: IdToStringArray = await getJsonFromFile('/Users/tedshaffer/Documents/Projects/importFromTakeout/testResults/takeoutFilesByDateTimeOriginal.json');
@@ -1581,8 +1629,8 @@ const matchGooglePhotosToTakeoutPhotos_2 = async (
     }
   }
 
-  const results: any = {
-    matchedTakeoutFiles,
+  const results: SecondPassResults = {
+    matchedGoogleMediaItems,
     unmatchedGoogleMediaItems: stillUnmatchedGoogleMediaItems
   };
   return results;
@@ -1649,19 +1697,47 @@ const matchGooglePhotosToTakeoutPhotos_3 = async (
   return results;
 }
 
+let filePathsToExifTags: FilePathToExifTags = {};
+
+const readFilePathsToExifTags = async () => {
+  filePathsToExifTags = await getJsonFromFile('/Users/tedshaffer/Documents/Projects/importFromTakeout/testResults/filePathsToExifTags.json');
+}
+
+const writeFilePathsToExifTags = async () => {
+  const filePathsToExifTagsStream: any = openWriteStream('/Users/tedshaffer/Documents/Projects/importFromTakeout/testResults/filePathsToExifTags.json');
+  const filePathsToExifTagsAsStr = JSON.stringify(filePathsToExifTags);
+  writeToWriteStream(filePathsToExifTagsStream, filePathsToExifTagsAsStr);
+  closeStream(filePathsToExifTagsStream);
+}
+
 const runMatchExperiments = async (authService: AuthService) => {
 
   const googleMediaItemsById: IdToGoogleMediaItems = await getJsonFromFile('/Users/tedshaffer/Documents/Projects/importFromTakeout/testResults/googleMediaItemsById.json');
   const takeoutFilesByFileName: IdToStringArray = await getJsonFromFile('/Users/tedshaffer/Documents/Projects/importFromTakeout/testResults/takeoutFilesByFileName.json');
+  await readFilePathsToExifTags();
+
+  console.log(Object.keys(googleMediaItemsById).length);
+  trimUnimportantMediaItems(googleMediaItemsById);
+  console.log(Object.keys(googleMediaItemsById).length);
 
   const firstPassResults: FirstPassResults = await matchGooglePhotosToTakeoutPhotos_1(googleMediaItemsById, takeoutFilesByFileName);
   const { matchedGoogleMediaItems, unmatchedGoogleMediaItems, googleMediaItemsToMultipleTakeoutFiles } = firstPassResults;
+  console.log('firstPassResults');
+  console.log(Object.keys(matchedGoogleMediaItems).length);
+  console.log(Object.keys(unmatchedGoogleMediaItems).length);
+  console.log(Object.keys(googleMediaItemsToMultipleTakeoutFiles).length);
 
-  const secondPassResults: any = await matchGooglePhotosToTakeoutPhotos_2(matchedGoogleMediaItems, unmatchedGoogleMediaItems);
-  const newMatchedGoogleMediaItems = secondPassResults.matchedTakeoutFiles;
+  const secondPassResults: SecondPassResults = await matchGooglePhotosToTakeoutPhotos_2(matchedGoogleMediaItems, unmatchedGoogleMediaItems);
+  const newMatchedGoogleMediaItems = secondPassResults.matchedGoogleMediaItems;
   const stillUnmatchedGoogleMediaItems = secondPassResults.unmatchedGoogleMediaItems;
 
-  console.log(firstPassResults);
+  console.log('secondPassResults');
+  console.log(Object.keys(matchedGoogleMediaItems).length);
+  console.log(Object.keys(newMatchedGoogleMediaItems).length);
+  console.log(stillUnmatchedGoogleMediaItems.length);
+  debugger;
+
+  const thirdPassResults: any = await matchGooglePhotosToTakeoutPhotos_3(takeoutFilesByFileName, newMatchedGoogleMediaItems, stillUnmatchedGoogleMediaItems);
   debugger;
 
   await matchUnmatchedFiles();
