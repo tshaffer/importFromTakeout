@@ -1784,7 +1784,34 @@ const matchGooglePhotosToTakeoutPhotos_5 = async(
   }
 }
 
+const matchGooglePhotosToTakeoutPhotos_6 = (
+  takeoutFilesByFileName: IdToStringArray,
+  matchedGoogleMediaItems: IdToMatchedGoogleMediaItem,
+  remainingUnmatchedGoogleMediaItemsNoFileNameMatches: any,
+) => {
+  for (const googleMediaItem of remainingUnmatchedGoogleMediaItemsNoFileNameMatches) {
+    const fileName = googleMediaItem.filename;
+    const fileExtension: string = path.extname(fileName);
 
+    const filePathWithoutExtension = fileName.split('.').slice(0, -1).join('.');
+
+    const filePathWithUpperCaseExtension = filePathWithoutExtension + fileExtension.toUpperCase();
+    if (takeoutFilesByFileName.hasOwnProperty(filePathWithUpperCaseExtension)) {
+      matchedGoogleMediaItems[googleMediaItem.id] = {
+        takeoutFilePath: filePathWithUpperCaseExtension,
+        googleMediaItem,
+      };
+    }
+
+    const filePathWithLowerCaseExtension = filePathWithoutExtension + fileExtension.toLowerCase();
+    if (takeoutFilesByFileName.hasOwnProperty(filePathWithLowerCaseExtension)) {
+      matchedGoogleMediaItems[googleMediaItem.id] = {
+        takeoutFilePath: filePathWithLowerCaseExtension,
+        googleMediaItem,
+      };
+    }
+  }
+}
 
 let filePathsToExifTags: FilePathToExifTags = {};
 
@@ -1834,9 +1861,13 @@ const runMatchExperiments = async (authService: AuthService) => {
   console.log('fifthPassResults');
   console.log(Object.keys(matchedGoogleMediaItems).length);
 
-  // await writeFilePathsToExifTags();
+  matchGooglePhotosToTakeoutPhotos_6(takeoutFilesByFileName, matchedGoogleMediaItems, thirdPassResults.remainingUnmatchedGoogleMediaItemsNoFileNameMatches);
+  console.log('sixthPassResults');
+  console.log(Object.keys(matchedGoogleMediaItems).length);
   debugger;
- 
+
+    // await writeFilePathsToExifTags();
+
   await matchUnmatchedFiles();
   debugger;
 
