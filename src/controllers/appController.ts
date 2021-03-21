@@ -585,16 +585,21 @@ const matchTags = (googleMediaItem: GoogleMediaItem, exifData: Tags): boolean =>
 }
 
 
+const retrieveExifData = async(filePath: string): Promise<any> => {
+  let exifData: Tags;
+  if (filePathsToExifTags.hasOwnProperty(filePath)) {
+    exifData = filePathsToExifTags[filePath];
+  } else {
+    exifData = await getExifData(filePath);
+    filePathsToExifTags[filePath] = exifData;
+  }
+  return exifData;
+}
+
 const getTagsMatch = async (googleMediaItem: GoogleMediaItem, takeoutFiles: string[]): Promise<string> => {
 
   for (const takeoutFile of takeoutFiles) {
-    let exifData: Tags;
-    if (filePathsToExifTags.hasOwnProperty(takeoutFile)) {
-      exifData = filePathsToExifTags[takeoutFile];
-    } else {
-      exifData = await getExifData(takeoutFile);
-      filePathsToExifTags[takeoutFile] = exifData;
-    }
+    const exifData: Tags = retrieveExifData(takeoutFile) as Tags;
     if (matchTags(googleMediaItem, exifData)) {
       return takeoutFile;
     }
@@ -1680,6 +1685,85 @@ const matchGooglePhotosToTakeoutPhotos_3 = async (
   return results;
 }
 
+const matchGooglePhotosToTakeoutPhotos_4 = async(
+  takeoutFilesByFileName: IdToStringArray,
+  remainingUnmatchedGoogleMediaItemsMultipleFileNameMatches: GoogleMediaItem[],
+): Promise<IdToGoogleMediaItem> => {
+
+  let fileCount = 0;
+  let filesWithGPSAndDateData = 0;
+  let filesWithGPSButNoDateCount = 0;
+  const googleItemsWithGPSButNoDateFile: GoogleMediaItem[] = [];
+  const filesWithGPSButNoDate: string[] = [];
+  const googleItemsWithOnlyOneThatHasNoDateTime: GoogleMediaItem[] = [];
+  const filesThatAreOnlyOneWithNoDateTime: string[] = [];
+  const filesWithNoDateTimeHaveGPS: boolean[] = [];
+  let filesWithNoDateTimeHaveGPSCount = 0;
+  let fileWithNoDateTime;
+
+  let filesWithNoDateTimeCount = 0;
+  let filesWithMultipleDateTimeCount = 0;
+  let filesWithZeroDateTimeCount = 0;
+
+  let atLeastOneTakeoutFileHasGpsForGoogleMediaItemCount = 0;
+  const googleMediaItemsWhereAtLeastOneTakeoutFileHasGps: IdToGoogleMediaItem = {};
+
+  for (const googleMediaItem of remainingUnmatchedGoogleMediaItemsMultipleFileNameMatches) {
+    const takeoutFilesWithSameFileName: string[] = takeoutFilesByFileName[googleMediaItem.filename];
+    let filesWithNoDateTime = 0;
+    let fileWithNoDateTimeHasGPS = false;
+    let oneOfTakeoutFilesHasGps = false;
+    for (const takeoutFilePath of takeoutFilesWithSameFileName) {
+      const exifData: Tags = await retrieveExifData(takeoutFilePath);
+      if (!isNil(exifData.GPSLatitude)) {
+        oneOfTakeoutFilesHasGps = true;
+      }
+      if (isNil(exifData.CreateDate) && isNil(exifData.DateTimeOriginal) && isNil(exifData.ModifyDate)) {
+        filesWithNoDateTime++;
+        fileWithNoDateTimeHasGPS = !isNil(exifData.GPSLatitude);
+        fileWithNoDateTime = takeoutFilePath;
+        if (!isNil(exifData.GPSLatitude)) {
+          googleItemsWithGPSButNoDateFile.push(googleMediaItem);
+          filesWithGPSButNoDate.push(takeoutFilePath);
+          filesWithGPSButNoDateCount++;
+        }
+      } else if (!isNil(exifData.GPSLatitude)) {
+        filesWithGPSAndDateData++;
+      }
+    }
+    if (filesWithNoDateTime === 1) {
+      googleItemsWithOnlyOneThatHasNoDateTime.push(googleMediaItem);
+      filesThatAreOnlyOneWithNoDateTime.push(fileWithNoDateTime);
+      filesWithNoDateTimeHaveGPS.push(fileWithNoDateTimeHasGPS);
+      if (fileWithNoDateTimeHasGPS) {
+        filesWithNoDateTimeHaveGPSCount++;
+      }
+      filesWithNoDateTimeCount++;
+    } else if (filesWithNoDateTime === 0) {
+      filesWithZeroDateTimeCount++;
+    } else {
+      filesWithMultipleDateTimeCount++;
+    }
+
+    if (oneOfTakeoutFilesHasGps) {
+      atLeastOneTakeoutFileHasGpsForGoogleMediaItemCount++;
+      googleMediaItemsWhereAtLeastOneTakeoutFileHasGps[googleMediaItem.id] = googleMediaItem;
+    }
+
+    fileCount++;
+    if ((fileCount % 100) === 0) {
+      console.log(fileCount);
+      console.log(filesWithGPSButNoDateCount);
+      console.log(filesWithGPSAndDateData);
+    }
+  }
+
+  return googleMediaItemsWhereAtLeastOneTakeoutFileHasGps;
+}
+
+
+
+
 let filePathsToExifTags: FilePathToExifTags = {};
 
 const readFilePathsToExifTags = async () => {
@@ -1717,11 +1801,15 @@ const runMatchExperiments = async (authService: AuthService) => {
   console.log(Object.keys(matchedGoogleMediaItems).length);
   console.log(stillUnmatchedGoogleMediaItems.length);
 
-  const thirdPassResults: any = await matchGooglePhotosToTakeoutPhotos_3(takeoutFilesByFileName, matchedGoogleMediaItems, stillUnmatchedGoogleMediaItems);
+  const thirdPassResults: ThirdPassResults = await matchGooglePhotosToTakeoutPhotos_3(takeoutFilesByFileName, matchedGoogleMediaItems, stillUnmatchedGoogleMediaItems);
   console.log('thirdPassResults');
   console.log(thirdPassResults);
-  debugger;
 
+  const fourthPassResults: IdToGoogleMediaItem = await matchGooglePhotosToTakeoutPhotos_4(takeoutFilesByFileName, thirdPassResults.remainingUnmatchedGoogleMediaItemsMultipleFileNameMatches);
+  console.log('fourthPassResults');
+  console.log(fourthPassResults);
+  debugger;
+ 
   await matchUnmatchedFiles();
   debugger;
 
