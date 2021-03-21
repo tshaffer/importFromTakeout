@@ -19,10 +19,7 @@ import {
   GoogleMediaItem, GoogleMediaMetadata, GooglePhoto, MatchResultsType,
 } from '../types';
 
-import { mediaItemsDir } from '../app';
-import { exifPropertyCount } from './exifUtils';
 import { isNil, isNumber, isObject, isString } from 'lodash';
-import { AuthService } from '../auth';
 
 // maps photo id to list of file paths that matched it
 interface MatchedPhoto {
@@ -34,13 +31,13 @@ interface FilePathToExifTags {
   [key: string]: Tags;
 }
 
-interface FirstPassResults {
+interface MatchFileNameResults {
   matchedGoogleMediaItems: IdToMatchedGoogleMediaItem;
   unmatchedGoogleMediaItems: IdToGoogleMediaItems;
   googleMediaItemsToMultipleTakeoutFiles: IdToStringArray;
 }
 
-interface SecondPassResults {
+interface MatchToDateTimeResults {
   unmatchedGoogleMediaItems: GoogleMediaItem[];
 }
 
@@ -82,12 +79,14 @@ type IdToMatchedGoogleMediaItem = {
   [key: string]: MatchedGoogleMediaItem;
 }
 
-export const runApp = (authService: AuthService) => {
+const unusedExtension: string[] = ['.mov', '.mp4', '.bmp', '.mpg', '.nef'];
+
+export const runApp = () => {
 
   // comment out standard functionality to try matching experiments
   // importImageFiles();
 
-  runMatchExperiments(authService);
+  matchGooglePhotosToTakeoutFiles();
 }
 
 const getJsonFromFile = async (filePath: string): Promise<any> => {
@@ -313,9 +312,7 @@ const getTakeoutFilesMatchingGoogleDate = (
   return [];
 }
 
-const unusedExtension: string[] = ['.mov', '.mp4', '.bmp', '.mpg', '.nef'];
-
-const trimUnimportantMediaItems = async (googleMediaItemsById: IdToGoogleMediaItems,
+const trimUnusedMediaItems = async (googleMediaItemsById: IdToGoogleMediaItems,
 ) => {
   for (const key in googleMediaItemsById) {
     if (Object.prototype.hasOwnProperty.call(googleMediaItemsById, key)) {
@@ -345,19 +342,22 @@ const trimUnimportantMediaItems = async (googleMediaItemsById: IdToGoogleMediaIt
   }
 }
 
-const matchGooglePhotosToTakeoutPhotos_1 = async (
+const matchToFileNames = async (
   googleMediaItemsById: IdToGoogleMediaItems,
   takeoutFilesByFileName: IdToStringArray)
-  : Promise<FirstPassResults> => {
+  : Promise<MatchFileNameResults> => {
 
   const matchedGoogleMediaItems: IdToMatchedGoogleMediaItem = {};
   const unmatchedGoogleMediaItems: IdToGoogleMediaItems = {};
   const googleMediaItemsToMultipleTakeoutFiles: IdToStringArray = {};
 
+  let googleMediaItemsCount = 0;
+
   for (const key in googleMediaItemsById) {
     if (Object.prototype.hasOwnProperty.call(googleMediaItemsById, key)) {
       const googleMediaItems: GoogleMediaItem[] = googleMediaItemsById[key];
       for (const googleMediaItem of googleMediaItems) {
+        googleMediaItemsCount++;
         if (takeoutFilesByFileName.hasOwnProperty(googleMediaItem.filename)) {
           const takeoutFilePaths: string[] = takeoutFilesByFileName[googleMediaItem.filename];
           if (takeoutFilePaths.length === 1) {
@@ -375,7 +375,9 @@ const matchGooglePhotosToTakeoutPhotos_1 = async (
       }
     }
   }
-  const results: FirstPassResults = {
+  console.log(googleMediaItemsCount + '\tNumber of googleMediaItems to match');
+
+  const results: MatchFileNameResults = {
     matchedGoogleMediaItems,
     unmatchedGoogleMediaItems,
     googleMediaItemsToMultipleTakeoutFiles
@@ -383,9 +385,9 @@ const matchGooglePhotosToTakeoutPhotos_1 = async (
   return results;
 }
 
-const matchGooglePhotosToTakeoutPhotos_2 = async (
+const matchToDateTime = async (
   matchedGoogleMediaItems: IdToMatchedGoogleMediaItem,
-  unmatchedGoogleMediaItems: IdToGoogleMediaItems): Promise<SecondPassResults> => {
+  unmatchedGoogleMediaItems: IdToGoogleMediaItems): Promise<MatchToDateTimeResults> => {
 
   const takeoutFilesByCreateDate: IdToStringArray = await getJsonFromFile('/Users/tedshaffer/Documents/Projects/importFromTakeout/testResults/takeoutFilesByCreateDate.json');
   const takeoutFilesByDateTimeOriginal: IdToStringArray = await getJsonFromFile('/Users/tedshaffer/Documents/Projects/importFromTakeout/testResults/takeoutFilesByDateTimeOriginal.json');
@@ -475,7 +477,7 @@ const matchGooglePhotosToTakeoutPhotos_2 = async (
     }
   }
 
-  const results: SecondPassResults = {
+  const results: MatchToDateTimeResults = {
     unmatchedGoogleMediaItems: stillUnmatchedGoogleMediaItems
   };
   return results;
@@ -663,84 +665,53 @@ const writeFilePathsToExifTags = async () => {
   closeStream(filePathsToExifTagsStream);
 }
 
-const runMatchExperiments = async (authService: AuthService) => {
+const matchGooglePhotosToTakeoutFiles = async () => {
 
   const googleMediaItemsById: IdToGoogleMediaItems = await getJsonFromFile('/Users/tedshaffer/Documents/Projects/importFromTakeout/testResults/googleMediaItemsById.json');
   const takeoutFilesByFileName: IdToStringArray = await getJsonFromFile('/Users/tedshaffer/Documents/Projects/importFromTakeout/testResults/takeoutFilesByFileName.json');
   await readFilePathsToExifTags();
 
-  console.log(Object.keys(googleMediaItemsById).length);
-  trimUnimportantMediaItems(googleMediaItemsById);
-  console.log(Object.keys(googleMediaItemsById).length);
+  console.log(Object.keys(googleMediaItemsById).length + '\tNumber of keys in googleMediaItemsById');
+  trimUnusedMediaItems(googleMediaItemsById);
+  console.log(Object.keys(googleMediaItemsById).length + '\tNumber of keys in googleMediaItemsById after trimming unused media items');
 
-  const firstPassResults: FirstPassResults = await matchGooglePhotosToTakeoutPhotos_1(googleMediaItemsById, takeoutFilesByFileName);
-  const { matchedGoogleMediaItems, unmatchedGoogleMediaItems, googleMediaItemsToMultipleTakeoutFiles } = firstPassResults;
-  console.log('firstPassResults');
-  console.log(Object.keys(matchedGoogleMediaItems).length);
-  console.log(Object.keys(unmatchedGoogleMediaItems).length);
-  console.log(Object.keys(googleMediaItemsToMultipleTakeoutFiles).length);
+  const matchFileNameResults: MatchFileNameResults = await matchToFileNames(googleMediaItemsById, takeoutFilesByFileName);
+  const { matchedGoogleMediaItems, unmatchedGoogleMediaItems, googleMediaItemsToMultipleTakeoutFiles } = matchFileNameResults;
 
-  const secondPassResults: SecondPassResults = await matchGooglePhotosToTakeoutPhotos_2(matchedGoogleMediaItems, unmatchedGoogleMediaItems);
-  const stillUnmatchedGoogleMediaItems = secondPassResults.unmatchedGoogleMediaItems;
+  console.log('');
+  console.log('Match file names');
+  console.log(Object.keys(matchedGoogleMediaItems).length + '\tMatched google media items')
+  console.log(Object.keys(unmatchedGoogleMediaItems).length + '\tUnmatched google media items')
 
-  console.log('secondPassResults');
-  console.log(Object.keys(matchedGoogleMediaItems).length);
-  console.log(stillUnmatchedGoogleMediaItems.length);
+  const matchToDateTimeResults: MatchToDateTimeResults = await matchToDateTime(matchedGoogleMediaItems, unmatchedGoogleMediaItems);
+  const stillUnmatchedGoogleMediaItems = matchToDateTimeResults.unmatchedGoogleMediaItems;
+
+  console.log('');
+  console.log('Match to date/time');
+  console.log(Object.keys(matchedGoogleMediaItems).length + '\tMatched google media items')
+  console.log(Object.keys(stillUnmatchedGoogleMediaItems).length + '\tUnmatched google media items')
 
   const thirdPassResults: ThirdPassResults = await matchGooglePhotosToTakeoutPhotos_3(takeoutFilesByFileName, matchedGoogleMediaItems, stillUnmatchedGoogleMediaItems);
-  console.log('thirdPassResults');
-  console.log(thirdPassResults);
-
+  const { remainingUnmatchedGoogleMediaItemsNoFileNameMatches, remainingUnmatchedGoogleMediaItemsMultipleFileNameMatches } = thirdPassResults;
+  console.log('');
+  console.log('Match to truncated file names');
+  console.log(Object.keys(matchedGoogleMediaItems).length + '\tMatched google media items')
+  console.log(remainingUnmatchedGoogleMediaItemsNoFileNameMatches.length, '\tremainingUnmatchedGoogleMediaItemsNoFileNameMatches');
+  console.log(remainingUnmatchedGoogleMediaItemsMultipleFileNameMatches.length, '\tremainingUnmatchedGoogleMediaItemsMultipleFileNameMatches');
+  
   const googleMediaItemsWhereAtLeastOneTakeoutFileHasGps: IdToGoogleMediaItem = await matchGooglePhotosToTakeoutPhotos_4(takeoutFilesByFileName, thirdPassResults.remainingUnmatchedGoogleMediaItemsMultipleFileNameMatches);
-  console.log(googleMediaItemsWhereAtLeastOneTakeoutFileHasGps);
-
+  
   await matchGooglePhotosToTakeoutPhotos_5(takeoutFilesByFileName, matchedGoogleMediaItems, googleMediaItemsWhereAtLeastOneTakeoutFileHasGps);
-  console.log('fifthPassResults');
-  console.log(Object.keys(matchedGoogleMediaItems).length);
+  console.log('');
+  console.log('Match to files with GPS data');
+  console.log(Object.keys(matchedGoogleMediaItems).length + '\tMatched google media items')
 
   matchGooglePhotosToTakeoutPhotos_6(takeoutFilesByFileName, matchedGoogleMediaItems, thirdPassResults.remainingUnmatchedGoogleMediaItemsNoFileNameMatches);
-  console.log('sixthPassResults');
-  console.log(Object.keys(matchedGoogleMediaItems).length);
+  console.log('');
+  console.log('Match to files with mismatched file extensions');
+  console.log(Object.keys(matchedGoogleMediaItems).length + '\tMatched google media items')
+  // console.log('sixthPassResults');
+  // console.log(Object.keys(matchedGoogleMediaItems).length);
   debugger;
 
-  // await getGooglePhotoInfo(authService);
-  debugger;
 }
-
-const max = 1000;
-const min = 100;
-
-const mediaItemByTimezone: any = {};
-let mediaItemsWithTimezone = 0;
-let exifDateTimesWithoutTimezone = 0;
-let mediaItemsCounted = 0;
-
-const getDateTimeSinceZero = (dt: any): number => {
-  mediaItemsCounted++;
-  let ts = -1;
-  try {
-    if (!isNil(dt)) {
-      if (isString(dt)) {
-        ts = Date.parse(dt);
-      } else {
-        ts = Date.parse((dt as ExifDateTime).toISOString());
-        if (isNumber((dt as ExifDateTime).tzoffsetMinutes)) {
-          const key: string = (dt as ExifDateTime).tzoffsetMinutes.toString();
-          if (!mediaItemByTimezone.hasOwnProperty(key)) {
-            mediaItemByTimezone[key] = 0;
-          }
-          mediaItemByTimezone[key] = mediaItemByTimezone[key] + 1;
-          mediaItemsWithTimezone++;
-        } else {
-          exifDateTimesWithoutTimezone++;
-        }
-      }
-    }
-  } catch (error) {
-    console.log('getDateTimeSinceZero error: ', error);
-    console.log('dt: ', dt);
-  }
-
-  return ts;
-}
-

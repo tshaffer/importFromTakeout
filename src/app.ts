@@ -20,14 +20,14 @@ async function main() {
   await connectDB();
 
   // setup authorization
-  const authStorage = new AuthStorage();
-  const authService = new AuthService(authStorage);
+  // const authStorage = new AuthStorage();
+  // const authService = new AuthService(authStorage);
 
   // authenticate with google
-  const scopes = [GooglePhotos.photosApiReadOnlyScope()];
-  await authService.authenticate(scopes);
+  // const scopes = [GooglePhotos.photosApiReadOnlyScope()];
+  // await authService.authenticate(scopes);
 
-  runApp(authService);
+  runApp();
 }
 
 main();
