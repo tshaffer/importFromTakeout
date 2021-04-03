@@ -715,17 +715,22 @@ const matchGooglePhotosToTakeoutFiles = async () => {
   console.log('Match to files with mismatched file extensions');
   console.log(Object.keys(matchedGoogleMediaItems).length + '\tMatched google media items')
 
-  const remainingUnmatchedGoogleMediaItemsNoFileNameMatchesStream: any = openWriteStream('/Users/tedshaffer/Documents/Projects/importFromTakeout/testResults/remainingUnmatchedGoogleMediaItemsNoFileNameMatches.json');
-  const t: any = { items: remainingUnmatchedGoogleMediaItemsNoFileNameMatches };
-  const remainingUnmatchedGoogleMediaItemsNoFileNameMatchesAsStr = JSON.stringify(t);
-  writeToWriteStream(remainingUnmatchedGoogleMediaItemsNoFileNameMatchesStream, remainingUnmatchedGoogleMediaItemsNoFileNameMatchesAsStr);
-  closeStream(remainingUnmatchedGoogleMediaItemsNoFileNameMatchesStream);
+  const matchedGoogleMediaItemsStream: any = openWriteStream('/Users/tedshaffer/Documents/Projects/importFromTakeout/testResults/matchedGoogleMediaItems.json');
+  const matchedGoogleMediaItemsAsStr = JSON.stringify(matchedGoogleMediaItems);
+  writeToWriteStream(matchedGoogleMediaItemsStream, matchedGoogleMediaItemsAsStr);
+  closeStream(matchedGoogleMediaItemsStream);
 
-  const remainingUnmatchedGoogleMediaItemsMultipleFileNameMatchesStream: any = openWriteStream('/Users/tedshaffer/Documents/Projects/importFromTakeout/testResults/remainingUnmatchedGoogleMediaItemsMultipleFileNameMatches.json');
-  const t2: any = { items: remainingUnmatchedGoogleMediaItemsMultipleFileNameMatches };
-  const remainingUnmatchedGoogleMediaItemsMultipleFileNameMatchesAsStr = JSON.stringify(t2);
-  writeToWriteStream(remainingUnmatchedGoogleMediaItemsMultipleFileNameMatchesStream, remainingUnmatchedGoogleMediaItemsMultipleFileNameMatchesAsStr);
-  closeStream(remainingUnmatchedGoogleMediaItemsMultipleFileNameMatchesStream);
+  // const remainingUnmatchedGoogleMediaItemsNoFileNameMatchesStream: any = openWriteStream('/Users/tedshaffer/Documents/Projects/importFromTakeout/testResults/remainingUnmatchedGoogleMediaItemsNoFileNameMatches.json');
+  // const t: any = { items: remainingUnmatchedGoogleMediaItemsNoFileNameMatches };
+  // const remainingUnmatchedGoogleMediaItemsNoFileNameMatchesAsStr = JSON.stringify(t);
+  // writeToWriteStream(remainingUnmatchedGoogleMediaItemsNoFileNameMatchesStream, remainingUnmatchedGoogleMediaItemsNoFileNameMatchesAsStr);
+  // closeStream(remainingUnmatchedGoogleMediaItemsNoFileNameMatchesStream);
+
+  // const remainingUnmatchedGoogleMediaItemsMultipleFileNameMatchesStream: any = openWriteStream('/Users/tedshaffer/Documents/Projects/importFromTakeout/testResults/remainingUnmatchedGoogleMediaItemsMultipleFileNameMatches.json');
+  // const t2: any = { items: remainingUnmatchedGoogleMediaItemsMultipleFileNameMatches };
+  // const remainingUnmatchedGoogleMediaItemsMultipleFileNameMatchesAsStr = JSON.stringify(t2);
+  // writeToWriteStream(remainingUnmatchedGoogleMediaItemsMultipleFileNameMatchesStream, remainingUnmatchedGoogleMediaItemsMultipleFileNameMatchesAsStr);
+  // closeStream(remainingUnmatchedGoogleMediaItemsMultipleFileNameMatchesStream);
 
   console.log('write complete');
 }
